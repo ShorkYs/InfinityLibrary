@@ -1,0 +1,5 @@
+name: LibraryProbe
+version: '1'
+main: LibraryProbe
+api-version: '26.3'
+depend: [InfinityLibraryPlugin]
