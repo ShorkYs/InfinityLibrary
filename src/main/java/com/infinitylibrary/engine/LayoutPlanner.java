@@ -1,6 +1,7 @@
 package com.infinitylibrary.engine;
 
 import com.infinitylibrary.model.*;
+import com.infinitylibrary.diversity.DiversityComposition;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.function.BiFunction;
@@ -14,7 +15,10 @@ public final class LayoutPlanner {
                 && origin.z() < (long)other.origin.z()+other.size.z() && (long)origin.z()+size.z()>other.origin.z();
         }
     }
-    public record Candidate(Room room, String entranceId, RoomTransform transform, Vector3i origin) {
+    public record Candidate(Room room, String entranceId, RoomTransform transform, Vector3i origin, UUID instanceId,DiversityComposition diversity) {
+        public Candidate(Room room,String entranceId,RoomTransform transform,Vector3i origin){this(room,entranceId,transform,origin,UUID.randomUUID());}
+        private Candidate(Room room,String entranceId,RoomTransform transform,Vector3i origin,UUID instance){this(room,entranceId,transform,origin,instance,DiversityComposition.resolve(room,instance));}
+        public List<ConnectionPoint> connections(){return diversity.connections(room);}
         public Box box() { return new Box(origin, transform.transformedSize(room.size())); }
         public ConnectionPoint worldDoor(ConnectionPoint cp) {
             ConnectionPoint t = cp.transform(transform,room.size());
@@ -28,6 +32,9 @@ public final class LayoutPlanner {
 
     public Result plan(Map<String,List<Candidate>> options, List<Box> occupied, int beamWidth, int maxRooms,
                        Predicate<Candidate> worldClear, BiFunction<Candidate,List<Box>,Integer> continuationScore, String requiredDoor) {
+        return plan(options,occupied,beamWidth,maxRooms,worldClear,continuationScore,requiredDoor,c -> true);
+    }
+    public Result plan(Map<String,List<Candidate>> options,List<Box> occupied,int beamWidth,int maxRooms,Predicate<Candidate> worldClear,BiFunction<Candidate,List<Box>,Integer> continuationScore,String requiredDoor,Predicate<Collection<Candidate>> preservesFrontier) {
         // Validate each candidate once, never on every search branch.
         Map<String,List<Candidate>> valid = new LinkedHashMap<>();
         Map<Candidate,Integer> scores = new HashMap<>();
@@ -56,7 +63,7 @@ public final class LayoutPlanner {
                     if (state.boxes.stream().anyMatch(b -> b.overlaps(c.box()))) continue;
                     Map<String,Candidate> chosen = new LinkedHashMap<>(state.chosen); chosen.put(door,c);
                     List<Box> boxes = new ArrayList<>(state.boxes); boxes.add(c.box());
-                    next.add(new State(chosen,boxes,state.score+scores.get(c)));
+                    if(preservesFrontier.test(chosen.values()))next.add(new State(chosen,boxes,state.score+scores.get(c)));
                 }
             }
             next.sort(bestFirst);
@@ -82,16 +89,16 @@ public final class LayoutPlanner {
         List<Box> obstacles = new ArrayList<>(occupied); obstacles.add(candidate.box());
         int score = 0;
         int exitsChecked = 0;
-        for (ConnectionPoint exit : candidate.room.connections()) {
+        for (ConnectionPoint exit : candidate.connections()) {
             if (exit.id().equals(candidate.entranceId)) continue;
-            if(exitsChecked++>=16) break;
+            exitsChecked++;
             int checks=0;
             ConnectionPoint target = candidate.worldDoor(exit);
             boolean fits = false;
             search: for (Room room : catalog) {
                 if (room.spawnChance() <= 0) continue;
                 for (ConnectionPoint cp : room.connections()) for (RoomTransform transform : RoomTransform.all()) {
-                    if(++checks>512) break search;
+                    checks++;
                     ConnectionPoint entrance = cp.transform(transform,room.size());
                     if (!target.compatibleWith(entrance)) continue;
                     Vector3i origin = target.position().add(new Vector3i(target.direction().getModX(),target.direction().getModY(),target.direction().getModZ())).subtract(entrance.position());

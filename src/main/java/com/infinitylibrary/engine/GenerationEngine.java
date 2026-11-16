@@ -39,10 +39,11 @@ public class GenerationEngine {
     private final Map<String,Reservation> reservations = new LinkedHashMap<>();
     private final Map<String,Long> lastPlanAttempt = new HashMap<>();
     private final java.util.function.Supplier<? extends Collection<? extends Player>> explorers;
-    private int explorationTicks, explorerCursor;
+    private int explorationTicks, explorerCursor, deadEndCursor;
     private final LayoutPlanner planner = new LayoutPlanner();
     private record Reservation(UUID parentId,String doorId,LayoutPlanner.Candidate candidate) {}
     private String key(UUID parent,String door) { return parent+"/"+door; }
+    private String lastPlanningNote="";
     private boolean running;
     private boolean paused;
     private final Set<String> pending = new HashSet<>();
@@ -64,12 +65,13 @@ public class GenerationEngine {
         for (PlacedRoom pr : placed) if (pending.contains(pr.origin().toString()))
             roomManager.get(pr.roomId()).ifPresent(r -> queuePlacement(r, pr));
         if (placed.isEmpty()) resetToStart();
+        if(!plugin.getConfig().getBoolean("generation.path-blocking.enabled",true))reopenDeadEnds();else for(PlacedRoom pr:placed)reapplyWalls(pr);
         save(); // Persist newly resolved recovery snapshots before the first queued block runs.
         int perTick = Math.max(1, plugin.getConfig().getInt("generation.placement-blocks-per-tick", 1800));
         int interval=Math.max(2,Math.min(200,plugin.getConfig().getInt("generation.exploration-check-interval-ticks",5)));
         taskId=Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin,() -> {
             for(int i=0;i<perTick;i++){Runnable r=placementQueue.poll();if(r==null)break;r.run();}
-            if(++explorationTicks>=interval){explorationTicks=0;checkExplorers(explorers.get());}
+            if(++explorationTicks>=interval){explorationTicks=0;checkExplorers(explorers.get());if(placementQueue.isEmpty()&&!paused)checkDeadEnds();}
         },1L,1L);
         if(roomManager.expansionRooms().isEmpty())plugin.getLogger().warning("Automatic expansion has no eligible normal templates. "+eligibilityProblem());
     }
@@ -102,7 +104,7 @@ public class GenerationEngine {
     private List<Expansion> openExits(Location location,double radius) {
         List<Expansion> exits=new ArrayList<>();
         for(PlacedRoom pr:placed)roomManager.get(pr.roomId()).ifPresent(room -> {
-            for(ConnectionPoint cp:room.connections())if(!pr.generatedConnections().contains(cp.id())){
+            for(ConnectionPoint cp:pr.connections(room))if(isOpen(pr,cp)){
                 ConnectionPoint transformed=cp.transform(pr.transform(),room.size());
                 double distance=pr.origin().add(transformed.position()).toLocation(location.getWorld()).add(0.5,0.5,0.5).distanceSquared(location);
                 if(distance<=radius*radius)exits.add(new Expansion(pr,cp,transformed,distance));
@@ -117,7 +119,7 @@ public class GenerationEngine {
     }
     private boolean expand(Expansion expansion,int[] planBudget) {
         PlacedRoom parent=expansion.parent();String door=expansion.localPoint().id();String retryKey=key(parent.instanceId(),door);
-        if(parent.generatedConnections().contains(door))return false;
+        if(parent.generatedConnections().contains(door)||parent.closedConnections().containsKey(door))return false;
         Reservation reservation=reservations.get(retryKey);
         if(reservation==null) {
             long now=System.nanoTime();Long previous=lastPlanAttempt.get(retryKey);
@@ -133,45 +135,29 @@ public class GenerationEngine {
 
     private void planParent(PlacedRoom parent,String requested,String forcedRoom) {
         Room source=roomManager.get(parent.roomId()).orElse(null); if(source==null) return;
-        List<LayoutPlanner.Box> occupied=new ArrayList<>();
-        for(PlacedRoom pr:placed) occupied.add(new LayoutPlanner.Box(pr.origin(),pr.size()));
-        for(Reservation r:reservations.values()) if(!r.parentId().equals(parent.instanceId())) occupied.add(r.candidate().box());
+        List<LayoutPlanner.Box> occupied=obstacles(parent.instanceId());
         int limit=plugin.getConfig().getInt("generation.max-total-rooms",0);
-        // Reservations are provisional: distant plans must not consume the remaining built-room allowance.
         int capacity=limit<=0?32:Math.max(0,limit-placed.size());
-        int perDoor=Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.candidates-per-door",12)));
-        int maxDoors=Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.max-doors",16)));
+        int perTemplate=Math.max(1,Math.min(64,plugin.getConfig().getInt("generation.planning.candidates-per-door",12)));
+        List<Room> catalog=new ArrayList<>(roomManager.expansionRooms());
+        TopologySearch search=search(catalog);
+        TopologySearch forcedSearch=forcedRoom==null?null:search(List.of(roomManager.getActive(forcedRoom).filter(r -> r.type()!=RoomType.STARTING).orElseThrow(() -> new IllegalArgumentException("Active normal room required."))));
+        List<ConnectionPoint> frontier=frontier();
+        List<ConnectionPoint> viable=frontier.stream().filter(cp -> search.continuation(cp,occupied,frontier)!=TopologySearch.Fit.NO).toList();
         Map<String,List<LayoutPlanner.Candidate>> options=new LinkedHashMap<>();
-        List<ConnectionPoint> exits=new ArrayList<>(source.connections());
-        exits.sort(Comparator.comparingInt(cp -> cp.id().equals(requested)?0:1));
+        List<ConnectionPoint> exits=new ArrayList<>(parent.connections(source));exits.sort(Comparator.comparingInt(cp -> cp.id().equals(requested)?0:1));
+        int maxDoors=Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.max-doors",16)));
         for(ConnectionPoint cp:exits) {
-            if(parent.generatedConnections().contains(cp.id())) continue;
-            if(options.size()>=maxDoors) break;
-            ConnectionPoint target=cp.transform(parent.transform(),source.size());
-            List<RoomManager.RoomSelection> selections;
-            if(forcedRoom!=null && cp.id().equals(requested)) {
-                Room forced=roomManager.getActive(forcedRoom).filter(r -> r.type()!=RoomType.STARTING).orElseThrow(() -> new IllegalArgumentException("STARTING or archived rooms cannot be expanded into the library.")); selections=new ArrayList<>();
-                for(ConnectionPoint entry:forced.connections()) for(RoomTransform t:RoomTransform.all())
-                    if(target.compatibleWith(entry.transform(t,forced.size()))) selections.add(new RoomManager.RoomSelection(forced,entry,t));
-            } else selections=roomManager.compatibleSelections(target,false);
-            List<LayoutPlanner.Candidate> candidates=new ArrayList<>(); Set<String> unique=new HashSet<>();
-            for(RoomManager.RoomSelection selection:selections) {
-                Room room=selection.room(); ConnectionPoint entrance=selection.localConnection().transform(selection.transform(),room.size());
-                Vector3i origin=parent.origin().add(target.position()).add(faceVector(target.direction())).subtract(entrance.position());
-                LayoutPlanner.Candidate c=new LayoutPlanner.Candidate(room,selection.localConnection().id(),selection.transform(),origin);
-                String signature=room.id()+"/"+origin+"/"+room.connections().stream().map(c::worldDoor).toList();
-                if(!unique.add(signature) || occupied.stream().anyMatch(box -> box.overlaps(c.box()))) continue;
-                candidates.add(c); if(candidates.size()>=perDoor) break;
-            }
-            options.put(cp.id(),candidates);
+            if(!isOpen(parent,cp)||options.size()>=maxDoors)continue;
+            ConnectionPoint target=worldDoor(parent,source,cp);
+            options.put(cp.id(),(forcedSearch!=null&&cp.id().equals(requested)?forcedSearch:search).candidates(target,occupied,perTemplate,cp.id().equals(requested)?forcedRoom:null));
         }
-        int[] budget={Math.max(1000,Math.min(1000000,plugin.getConfig().getInt("generation.planning.world-block-budget",150000)))};
-        String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
-        List<Room> catalog=roomManager.expansionRooms();
         LayoutPlanner.Result result=planner.plan(options,occupied,
             Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.beam-width",12))),capacity,
-            c -> isWorldClear(c.origin(),c.box().size(),budget),
-            (c,obstacles) -> planner.continuationScore(c,catalog,obstacles),requested);
+            c -> search.clear(c.box())==TopologySearch.Fit.YES,
+            (c,obs) -> {List<LayoutPlanner.Box> all=new ArrayList<>(obs);all.add(c.box());int score=0;for(ConnectionPoint cp:c.connections())if(!cp.id().equals(c.entranceId()))score+=switch(search.continuation(c.worldDoor(cp),all,frontier)){case YES -> 8;case NO -> -12;case UNKNOWN -> 0;};return score;},requested,
+            chosen -> search.preserves(viable,frontier,occupied,chosen));
+        lastPlanningNote=result.neighbors().isEmpty()?(search.limited()?"Planning deferred: search budget/topology limit reached; increase generation.planning budgets. No dead end was inferred from incomplete checks.":"No placement can fit while preserving the surrounding open connections."):"";
         if(forcedRoom!=null && !result.neighbors().containsKey(requested)) return;
         reservations.values().removeIf(r -> r.parentId().equals(parent.instanceId()));
         result.neighbors().forEach((door,c) -> reservations.put(key(parent.instanceId(),door),new Reservation(parent.instanceId(),door,c)));
@@ -181,7 +167,7 @@ public class GenerationEngine {
     private boolean commit(Reservation reservation) {
         if(roomLimitReached()) return false;
         PlacedRoom parent=placed.stream().filter(p -> p.instanceId().equals(reservation.parentId())).findFirst().orElse(null);
-        if(parent==null || parent.generatedConnections().contains(reservation.doorId())) { reservations.remove(key(reservation.parentId(),reservation.doorId())); return false; }
+        if(parent==null || parent.generatedConnections().contains(reservation.doorId())||parent.closedConnections().containsKey(reservation.doorId())) { reservations.remove(key(reservation.parentId(),reservation.doorId())); return false; }
         LayoutPlanner.Candidate c=reservation.candidate();
         if(roomManager.getActive(c.room().id()).filter(r -> r.type()!=RoomType.STARTING).isEmpty()){replanFutureRooms();return false;}
         // Revalidate terrain and reservations immediately before mutating any blocks.
@@ -190,9 +176,12 @@ public class GenerationEngine {
             || reservations.values().stream().filter(r -> r!=reservation).anyMatch(r -> r.candidate().box().overlaps(c.box()))) {
             reservations.values().removeIf(r -> r.parentId().equals(parent.instanceId())); save(); return false;
         }
+        var guard=search(roomManager.expansionRooms());var before=obstacles(parent.instanceId());var open=frontier();var viable=open.stream().filter(cp -> guard.continuation(cp,before,open)!=TopologySearch.Fit.NO).toList();
+        if(!guard.preserves(viable,open,before,List.of(c))){lastPlanningNote="Reserved placement deferred: cannot prove surrounding exits remain connectable. Check terrain/planning budgets.";reservations.remove(key(parent.instanceId(),reservation.doorId()));save();return false;}
         reservations.remove(key(parent.instanceId(),reservation.doorId()));
         parent.generatedConnections().add(reservation.doorId());
-        PlacedRoom pr=new PlacedRoom(UUID.randomUUID(),c.room().id(),c.origin(),c.box().size(),c.transform());
+        PlacedRoom pr=new PlacedRoom(c.instanceId(),c.room().id(),c.origin(),c.box().size(),c.transform());
+        pr.diversity(c.diversity());pr.connections(c.connections());
         pr.generatedConnections().add(c.entranceId());
         connectExistingExits(pr,c.room());
         placed.add(pr);
@@ -203,14 +192,14 @@ public class GenerationEngine {
     }
 
     private void connectExistingExits(PlacedRoom next,Room room) {
-        for(ConnectionPoint cp:room.connections()) {
-            if(next.generatedConnections().contains(cp.id())) continue;
+        for(ConnectionPoint cp:next.connections(room)) {
+            if(!isOpen(next,cp)) continue;
             ConnectionPoint door=cp.transform(next.transform(),room.size());
             Vector3i adjacent=next.origin().add(door.position()).add(faceVector(door.direction()));
             for(PlacedRoom existing:placed) {
                 Room template=roomManager.get(existing.roomId()).orElse(null); if(template==null) continue;
-                for(ConnectionPoint old:template.connections()) {
-                    if(existing.generatedConnections().contains(old.id())) continue;
+                for(ConnectionPoint old:existing.connections(template)) {
+                    if(!isOpen(existing,old)) continue;
                     ConnectionPoint other=old.transform(existing.transform(),template.size());
                     if(door.compatibleWith(other) && adjacent.equals(existing.origin().add(other.position()))) {
                         next.generatedConnections().add(cp.id()); existing.generatedConnections().add(old.id());
@@ -221,21 +210,39 @@ public class GenerationEngine {
         }
     }
 
-    private void sealConnection(PlacedRoom parent, ConnectionPoint target) {
-        if (!plugin.getConfig().getBoolean("generation.path-blocking.enabled", true)) return;
-        World w = ensureWorld();
-        Material blockMaterial = Material.matchMaterial(plugin.getConfig().getString("generation.path-blocking.material", "SMOOTH_STONE"));
-        if (blockMaterial == null) blockMaterial = Material.SMOOTH_STONE;
-        Vector3i base = parent.origin().add(target.position());
-        Vector3i outward = faceVector(target.direction());
-        for (int dy=0;dy<target.height();dy++) for (int dw=-(target.width()/2);dw<=target.width()/2;dw++) {
-            int x = base.x() + outward.x(), y = base.y() + dy + outward.y(), z = base.z() + outward.z();
-            if (target.direction()==BlockFace.NORTH || target.direction()==BlockFace.SOUTH) x += dw;
-            else if (target.direction()==BlockFace.EAST || target.direction()==BlockFace.WEST) z += dw;
-            w.getBlockAt(x,y,z).setType(blockMaterial, false);
-            sealedBlocks.add(new Vector3i(x,y,z));
-        }
+    private boolean isOpen(PlacedRoom pr,ConnectionPoint cp){return !pr.generatedConnections().contains(cp.id())&&!pr.closedConnections().containsKey(cp.id());}
+    private ConnectionPoint worldDoor(PlacedRoom pr,Room room,ConnectionPoint cp){return cp.transform(pr.transform(),room.size()).offset(cp.id(),pr.origin());}
+    private List<ConnectionPoint> frontier(){List<ConnectionPoint> result=new ArrayList<>();for(PlacedRoom pr:placed)roomManager.get(pr.roomId()).ifPresent(room -> {for(ConnectionPoint cp:pr.connections(room))if(isOpen(pr,cp))result.add(worldDoor(pr,room,cp));});return result;}
+    private List<LayoutPlanner.Box> obstacles(UUID ignoreParent){List<LayoutPlanner.Box> result=new ArrayList<>();for(PlacedRoom pr:placed)result.add(new LayoutPlanner.Box(pr.origin(),pr.size()));for(Reservation r:reservations.values())if(!r.parentId().equals(ignoreParent))result.add(r.candidate().box());return result;}
+    private TopologySearch search(Collection<Room> catalog){
+        int[] budget={Math.max(1000,Math.min(2000000,plugin.getConfig().getInt("generation.planning.world-block-budget",300000)))};
+        return new TopologySearch(catalog,Math.max(1,Math.min(256,plugin.getConfig().getInt("generation.planning.topology-choices-per-room",64))),Math.max(1000,Math.min(2000000,plugin.getConfig().getInt("generation.planning.connection-check-budget",200000))),box -> {
+            World w=ensureWorld();Vector3i o=box.origin(),z=box.size();
+            if(o.y()<w.getMinHeight()||(long)o.y()+z.y()>w.getMaxHeight()||!w.getWorldBorder().isInside(o.toLocation(w))||!w.getWorldBorder().isInside(o.add(z).subtract(new Vector3i(1,1,1)).toLocation(w)))return TopologySearch.Fit.NO;
+            for(int x=o.x();x<o.x()+z.x();x++)for(int y=o.y();y<o.y()+z.y();y++)for(int k=o.z();k<o.z()+z.z();k++){if(budget[0]--<=0)return TopologySearch.Fit.UNKNOWN;if(!w.getBlockAt(x,y,k).getType().isAir())return TopologySearch.Fit.NO;}
+            return TopologySearch.Fit.YES;
+        });
     }
+    private void checkDeadEnds(){
+        if(!running||!plugin.getConfig().getBoolean("generation.path-blocking.enabled",true)||roomManager.expansionRooms().isEmpty())return;
+        List<Expansion> exits=openExits(new Location(ensureWorld(),0,0,0),Double.POSITIVE_INFINITY);if(exits.isEmpty())return;
+        var search=search(roomManager.expansionRooms());var doors=frontier();var boxes=placed.stream().map(pr -> new LayoutPlanner.Box(pr.origin(),pr.size())).toList();
+        int checks=Math.min(2,exits.size());int start=Math.floorMod(deadEndCursor,exits.size());
+        for(int i=0;i<checks;i++){Expansion e=exits.get((start+i)%exits.size());if(reservations.containsKey(key(e.parent().instanceId(),e.localPoint().id())))continue;Room room=roomManager.get(e.parent().roomId()).orElse(null);if(room!=null&&search.continuation(worldDoor(e.parent(),room,e.localPoint()),boxes,doors)==TopologySearch.Fit.NO)sealConnection(e.parent(),e.localPoint());}
+        deadEndCursor=(start+checks)%exits.size();
+    }
+    private BlockData wallData(){
+        String value=plugin.getConfig().getString("generation.path-blocking.block-data",plugin.getConfig().getString("generation.path-blocking.material","SMOOTH_STONE"));
+        try{BlockData data=Bukkit.createBlockData(value.toLowerCase(Locale.ROOT));if(!data.getMaterial().isSolid())throw new IllegalArgumentException();return data;}catch(IllegalArgumentException ex){return Material.SMOOTH_STONE.createBlockData();}
+    }
+    private void sealConnection(PlacedRoom parent,ConnectionPoint local){
+        if(!isOpen(parent,local))return;Room room=roomManager.get(parent.roomId()).orElse(null);if(room==null)return;
+        List<RoomBlock> restore=new ArrayList<>();World w=ensureWorld();for(Vector3i cell:local.cells()){Vector3i pos=parent.origin().add(parent.transform().transform(cell,room.size()));restore.add(new RoomBlock(pos,w.getBlockAt(pos.x(),pos.y(),pos.z()).getBlockData().getAsString()));}
+        parent.closedConnections().put(local.id(),List.copyOf(restore));reservations.remove(key(parent.instanceId(),local.id()));save();reapplyWalls(parent);
+    }
+    private void reapplyWalls(PlacedRoom pr){World w=ensureWorld();for(var entry:pr.closedConnections().entrySet())for(RoomBlock rb:entry.getValue()){BlockData data=wallData();String door=entry.getKey();placementQueue.add(() -> {if(pr.closedConnections().containsKey(door))w.getBlockAt(rb.position().x(),rb.position().y(),rb.position().z()).setBlockData(data,false);});}}
+    public int closedExitCount(){return placed.stream().mapToInt(pr -> pr.closedConnections().size()).sum();}
+    public void reopenDeadEnds(){World w=ensureWorld();for(PlacedRoom pr:placed){for(var blocks:pr.closedConnections().values())for(RoomBlock rb:blocks)w.getBlockAt(rb.position().x(),rb.position().y(),rb.position().z()).setBlockData(Bukkit.createBlockData(rb.blockData()),false);pr.closedConnections().clear();}save();}
 
     public void resetToStart() {
         Room start=roomManager.getActive(roomManager.activeStartId()).orElseThrow(() -> new IllegalArgumentException("Active start template is missing. Restore it or select /il startroom <id> before resetting."));
@@ -257,6 +264,7 @@ public class GenerationEngine {
     private void queuePlacement(Room room, PlacedRoom instance) {
         Vector3i origin=instance.origin();RoomTransform transform=instance.transform();
         if(instance.diversity()==null)instance.diversity(com.infinitylibrary.diversity.DiversityComposition.resolve(room,instance.instanceId()));
+        if(instance.frozenConnections()==null)instance.connections(instance.diversity().connections(room));
         if(instance.props()==null)instance.props(plugin.getPropManager().compose(room,instance.instanceId()));
         World w = ensureWorld();
         pending.add(origin.toString());
@@ -397,8 +405,8 @@ public class GenerationEngine {
         if(paused||roomLimitReached()||!placementQueue.isEmpty()||room==null) return false;
         for(PlacedRoom parent:List.copyOf(placed)) {
             Room source=roomManager.get(parent.roomId()).orElse(null); if(source==null) continue;
-            for(ConnectionPoint cp:source.connections()) {
-                if(parent.generatedConnections().contains(cp.id())) continue;
+            for(ConnectionPoint cp:parent.connections(source)) {
+                if(!isOpen(parent,cp)) continue;
                 planParent(parent,cp.id(),roomId);
                 Reservation r=reservations.get(key(parent.instanceId(),cp.id()));
                 if(r!=null && r.candidate().room().id().equals(roomId)) return commit(r);
@@ -409,12 +417,12 @@ public class GenerationEngine {
 
     public void save() {
         YamlConfiguration y = new YamlConfiguration(); y.set("pending", new ArrayList<>(pending)); y.set("paused", paused); y.set("world", plugin.getConfig().getString("world")); y.set("sealed-blocks", sealedBlocks.stream().map(Vector3i::toString).toList()); ConfigurationSection root = y.createSection("rooms"); int i=0;
-        synchronized (placed) { for (PlacedRoom pr : placed) { ConfigurationSection s = root.createSection(String.valueOf(i++)); s.set("uuid", pr.instanceId().toString()); s.set("room-id", pr.roomId()); pr.origin().write(s.createSection("origin")); pr.size().write(s.createSection("size")); writeTransform(s.createSection("transform"), pr.transform()); s.set("generated-connections", new ArrayList<>(pr.generatedConnections())); if(pr.props()!=null)pr.props().write(s.createSection("props"));if(pr.diversity()!=null)pr.diversity().write(s.createSection("diversity")); } }
+        synchronized (placed) { for (PlacedRoom pr : placed) { ConfigurationSection s = root.createSection(String.valueOf(i++)); s.set("uuid", pr.instanceId().toString()); s.set("room-id", pr.roomId()); pr.origin().write(s.createSection("origin")); pr.size().write(s.createSection("size")); writeTransform(s.createSection("transform"), pr.transform()); s.set("generated-connections", new ArrayList<>(pr.generatedConnections())); if(pr.props()!=null)pr.props().write(s.createSection("props"));if(pr.diversity()!=null)pr.diversity().write(s.createSection("diversity"));if(pr.frozenConnections()!=null){var cps=s.createSection("connections");for(ConnectionPoint cp:pr.frozenConnections())cp.write(cps.createSection(cp.id()));}var closed=s.createSection("closed-connections");for(var entry:pr.closedConnections().entrySet())closed.set(entry.getKey(),entry.getValue().stream().map(b -> b.position()+"|"+b.blockData()).toList()); } }
         ConfigurationSection plans=y.createSection("plans"); int j=0;
         for(Reservation r:reservations.values()) {
             ConfigurationSection s=plans.createSection(String.valueOf(j++));
             s.set("parent",r.parentId().toString()); s.set("door",r.doorId()); s.set("room",r.candidate().room().id());
-            s.set("entrance",r.candidate().entranceId()); r.candidate().origin().write(s.createSection("origin"));
+            s.set("instance",r.candidate().instanceId().toString());r.candidate().diversity().write(s.createSection("diversity"));s.set("entrance",r.candidate().entranceId()); r.candidate().origin().write(s.createSection("origin"));
             writeTransform(s.createSection("transform"),r.candidate().transform());
         }
         try { y.save(file); } catch (IOException e) { plugin.getLogger().severe("Unable to save generated.yml: " + e.getMessage()); }
@@ -430,6 +438,9 @@ public class GenerationEngine {
             else if(!pending.contains(pr.origin().toString()))pr.props(com.infinitylibrary.props.PropComposition.EMPTY);
             if(s.isConfigurationSection("diversity"))pr.diversity(com.infinitylibrary.diversity.DiversityComposition.read(s.getConfigurationSection("diversity")));
             else if(!pending.contains(pr.origin().toString()))pr.diversity(com.infinitylibrary.diversity.DiversityComposition.EMPTY);
+            if(s.isConfigurationSection("connections")){var c=s.getConfigurationSection("connections");List<ConnectionPoint> cps=new ArrayList<>();for(String id:c.getKeys(false))cps.add(ConnectionPoint.read(id,c.getConfigurationSection(id)));pr.connections(cps);}
+            else if(!pending.contains(pr.origin().toString()))roomManager.get(pr.roomId()).ifPresent(r -> pr.connections(pr.diversity().connections(r)));
+            var closed=s.getConfigurationSection("closed-connections");if(closed!=null)for(String id:closed.getKeys(false)){List<RoomBlock> blocks=new ArrayList<>();for(String line:closed.getStringList(id)){String[] parts=line.split("\\|",2);blocks.add(new RoomBlock(Vector3i.parse(parts[0]),parts[1]));}pr.closedConnections().put(id,List.copyOf(blocks));}
             placed.add(pr); }
         ConfigurationSection plans=y.getConfigurationSection("plans");
         if(plans!=null) for(String key:plans.getKeys(false)) try {
@@ -438,8 +449,8 @@ public class GenerationEngine {
             String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
             if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
             PlacedRoom owner=placed.stream().filter(p -> p.instanceId().equals(parent)).findFirst().orElseThrow();
-            if(owner.generatedConnections().contains(door)) continue;
-            reservations.put(key(parent,door),new Reservation(parent,door,new LayoutPlanner.Candidate(room,s.getString("entrance"),readTransform(s.getConfigurationSection("transform")),Vector3i.read(s.getConfigurationSection("origin")))));
+            if(owner.generatedConnections().contains(door)||owner.closedConnections().containsKey(door)) continue;
+            reservations.put(key(parent,door),new Reservation(parent,door,new LayoutPlanner.Candidate(room,s.getString("entrance"),readTransform(s.getConfigurationSection("transform")),Vector3i.read(s.getConfigurationSection("origin")),s.contains("instance")?UUID.fromString(s.getString("instance")):UUID.randomUUID(),s.isConfigurationSection("diversity")?com.infinitylibrary.diversity.DiversityComposition.read(s.getConfigurationSection("diversity")):com.infinitylibrary.diversity.DiversityComposition.resolve(room,UUID.randomUUID()))));
         } catch(RuntimeException e) { plugin.getLogger().warning("Skipping invalid room reservation: "+e.getMessage()); }
     }
     private void writeTransform(ConfigurationSection s, RoomTransform transform) {
@@ -461,7 +472,7 @@ public class GenerationEngine {
         }
         return "No enabled FILLER/BOOK/READ expansion template. Save/select a normal base or restore one.";
     }
-    public int openExitCount() {int count=0;for(PlacedRoom pr:placed){Room r=roomManager.get(pr.roomId()).orElse(null);if(r!=null)for(ConnectionPoint cp:r.connections())if(!pr.generatedConnections().contains(cp.id()))count++;}return count;}
+    public int openExitCount() {int count=0;for(PlacedRoom pr:placed){Room r=roomManager.get(pr.roomId()).orElse(null);if(r!=null)for(ConnectionPoint cp:pr.connections(r))if(isOpen(pr,cp))count++;}return count;}
     public String explorationStatus() {
         if(!running)return "Stopped";if(paused)return "Paused (/il resume)";
         if(roomManager.expansionRooms().isEmpty())return eligibilityProblem();
@@ -470,15 +481,15 @@ public class GenerationEngine {
         return "Ready: movement and periodic proximity checks enabled";
     }
     public List<String> diagnose(Player player) {
-        List<String> lines=new ArrayList<>();lines.add("Automatic generation: "+explorationStatus());
+        List<String> lines=new ArrayList<>();if(!lastPlanningNote.isEmpty())lines.add(lastPlanningNote);lines.add("Automatic generation: "+explorationStatus());
         lines.add("World: "+plugin.getConfig().getString("world")+" | Start: "+roomManager.activeStartId()+" | Base: "+plugin.getConfig().getString("generation.base-room-id","builtin_modular"));
-        lines.add("Eligible normal templates: "+roomManager.expansionRooms().size()+" | Open exits: "+openExitCount()+" | Trigger radius: "+proximityRadius());
+        lines.add("Eligible normal templates: "+roomManager.expansionRooms().size()+" | Closed exits: "+closedExitCount()+" | Open exits: "+openExitCount()+" | Trigger radius: "+proximityRadius());
         if(!player.getWorld().getName().equals(plugin.getConfig().getString("world","InfinityLibrary"))){lines.add("You are outside the configured library world.");return lines;}
         List<Expansion> nearest=openExits(player.getLocation(),Double.POSITIVE_INFINITY);
         if(nearest.isEmpty())return lines;
         for(Expansion e:nearest.stream().limit(3).toList()) {
             ConnectionPoint door=e.worldPoint();Set<String> matching=new LinkedHashSet<>();
-            for(Room r:roomManager.expansionRooms())for(ConnectionPoint cp:r.connections())for(RoomTransform t:RoomTransform.all())if(door.compatibleWith(cp.transform(t,r.size())))matching.add(r.id());
+            for(Room r:roomManager.expansionRooms())for(var choice:com.infinitylibrary.diversity.DiversityComposition.choices(r,64).values())for(ConnectionPoint cp:choice.connections(r))for(RoomTransform t:RoomTransform.all())if(door.compatibleWith(cp.transform(t,r.size())))matching.add(r.id());
             lines.add("Exit "+e.parent().roomId()+"/"+e.localPoint().id()+" | "+String.format(Locale.ROOT,"%.1f",Math.sqrt(e.distanceSquared()))+" blocks | "+door.direction()+" "+door.width()+"x"+door.height()+" floor "+door.floor()+" | Matching templates: "+(matching.isEmpty()?"NONE (check exit sizes/floor index)":String.join(", ",matching)));
         }
         if(nearest.getFirst().distanceSquared()>proximityRadius()*proximityRadius())lines.add("Move closer to an open exit; all are outside the trigger radius.");
@@ -487,7 +498,7 @@ public class GenerationEngine {
     }
 
     public boolean roomLimitReached() { int limit = plugin.getConfig().getInt("generation.max-total-rooms", 0); return limit > 0 && placed.size() >= limit; }
-    public void replanFutureRooms() { reservations.clear();lastPlanAttempt.clear();save(); }
+    public void replanFutureRooms() { lastPlanningNote="";reservations.clear();lastPlanAttempt.clear();reopenDeadEnds();save(); }
     public int plannedCount() { return reservations.size(); }
     public int placedCount() { return placed.size(); }
     public int queuedBlocks() { return placementQueue.size(); }

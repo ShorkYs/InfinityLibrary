@@ -16,6 +16,12 @@ public class PlacedRoom {
     private final Vector3i origin;
     private final Vector3i size;
     private final RoomTransform transform;
+    private java.util.List<ConnectionPoint> connections;
+    public java.util.List<ConnectionPoint> connections(Room room) {return connections==null?(diversity==null?room.connections():diversity.connections(room)):connections;}
+    public void connections(java.util.List<ConnectionPoint> value){connections=java.util.List.copyOf(value);}
+    public java.util.List<ConnectionPoint> frozenConnections(){return connections;}
+    private final java.util.Map<String,java.util.List<RoomBlock>> closedConnections=new java.util.LinkedHashMap<>();
+    public java.util.Map<String,java.util.List<RoomBlock>> closedConnections(){return closedConnections;}
     private final Set<String> generatedConnections = new HashSet<>();
 
     public PlacedRoom(UUID instanceId, String roomId, Vector3i origin, Vector3i size) {

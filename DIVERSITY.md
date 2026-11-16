@@ -124,7 +124,8 @@ than rerolling or depending on a later-edited source definition. Existing comple
 retain their saved designs. Changes apply to **future room instances**.
 
 Targets must stay within the whole-room bounds. They may include wall/floor panels, but
-cannot obstruct a doorway/entrance clearance, overlap another Diversity target, or overlap
+must either contain a complete doorway or stay clear of its entrance clearance. They cannot
+overlap another Diversity target or overlap
 a decoration area. Keep walking paths clear yourself; this is not a pathfinding guarantee.
 Legacy variation blocks cannot overlap a new Diversity target. To migrate such a target:
 
@@ -149,3 +150,12 @@ Keep matching world/plugin backups before upgrades, resets or manual YAML edits.
 plugin versions do not understand all 2.4 Diversity/snapshot fields; restore a matching
 backup if downgrading. The real 26.3 client presentation and your custom builds should be
 checked before using the feature on a valuable world.
+
+## Variant-only connection points (2.5)
+
+After capturing a variant, `/il diversityconnection <area> <variant> <direction> [floor] [id]`
+gives a separate connection wand. Click two opening corners on the captured source, then
+save/apply Diversity. When editing a loaded definition, click on the target instead.
+The variant's openings are included in planning before blocks are placed, and the chosen
+connections persist with the instance. Alternatives replace normal doors fully inside their
+target; default choices retain them. See [GENERATION.md](GENERATION.md) for the complete workflow.

@@ -48,7 +48,7 @@ public class Room {
     public double spawnChance() { return spawnChance; }
 
     public void validate() {
-        if (connections.isEmpty()) throw new IllegalArgumentException("Room " + id + " must contain at least one connection point");
+        if (connections.isEmpty()&&diversityAreas.stream().flatMap(a -> a.variants().stream()).allMatch(v -> v.connections().isEmpty())) throw new IllegalArgumentException("Room " + id + " must contain at least one connection point");
         if (size.x() < 1 || size.y() < 1 || size.z() < 1) throw new IllegalArgumentException("Room " + id + " has invalid size");
         boolean hasBookshelf = false, hasSeat = false;
         for (RoomBlock block : blocks) {
@@ -99,12 +99,20 @@ public class Room {
     }
     public static void validateDiversityAreas(Vector3i roomSize,List<ConnectionPoint> connections,List<PropArea> props,List<VariationArea> legacy,List<DiversityArea> areas) {
         if(areas.size()>16)throw new IllegalArgumentException("At most 16 Diversity areas per room.");
-        Set<String> ids=new HashSet<>();long volume=0,alternatives=0;
+        Set<String> ids=new HashSet<>();Map<String,String> doorOwners=new HashMap<>();long volume=0,alternatives=0;
         for(int i=0;i<areas.size();i++) {
             DiversityArea area=areas.get(i);PropArea bounds=area.bounds();Vector3i m=area.min(),s=area.size();
             if(!ids.add(area.id()))throw new IllegalArgumentException("Duplicate Diversity area: "+area.id());
             if(m.x()<0||m.y()<0||m.z()<0||(long)m.x()+s.x()>roomSize.x()||(long)m.y()+s.y()>roomSize.y()||(long)m.z()+s.z()>roomSize.z())throw new IllegalArgumentException("Diversity target must be within the selected room.");
-            for(ConnectionPoint cp:connections)if(intersectsDoor(bounds,cp))throw new IllegalArgumentException("Diversity area obstructs doorway: "+cp.id());
+            for(ConnectionPoint cp:connections)if(intersectsDoor(bounds,cp)&&!cp.cells().stream().allMatch(bounds::contains))throw new IllegalArgumentException("Diversity target must contain the entire doorway or stay clear of it: "+cp.id());
+            for(var variant:area.variants())for(ConnectionPoint cp:variant.connections()) {
+                ConnectionPoint local=cp.offset("div_"+area.id()+"_"+cp.id(),area.min());
+                String owner=doorOwners.putIfAbsent(local.id(),area.id());
+                if(owner!=null&&!owner.equals(area.id()))throw new IllegalArgumentException("Variant connection IDs collide across areas: "+local.id());
+                if(connections.stream().anyMatch(old -> old.id().equals(local.id())&&!bounds.contains(old.position())))throw new IllegalArgumentException("Variant connection ID collides with a room connection: "+local.id());
+                if(!local.onBoundary(roomSize))throw new IllegalArgumentException("Diversity connection must open on the outer room boundary: "+cp.id());
+                for(PropArea prop:props)if(intersectsDoor(prop,local))throw new IllegalArgumentException("Diversity connection obstructed by decoration: "+cp.id());
+            }
             for(PropArea prop:props)if(bounds.overlaps(prop))throw new IllegalArgumentException("Diversity and decoration areas cannot overlap: "+area.id()+" / "+prop.id());
             for(int j=0;j<i;j++)if(bounds.overlaps(areas.get(j).bounds()))throw new IllegalArgumentException("Diversity areas overlap.");
             for(VariationArea v:legacy)if(v.blocks().stream().anyMatch(b -> bounds.contains(b.position())))throw new IllegalArgumentException("Diversity overlaps a legacy variation; remove that variation or use a different target.");

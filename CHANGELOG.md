@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.0
+
+- Consider every eligible catalog template, with separate alternatives per template/topology;
+  retain room/variant weighting while prioritizing fit and preserving viable connections.
+- Check other placed rooms' open exits during sibling search and again before committing;
+  connect compatible adjacent exits as loops and score candidate continuations.
+- Close proven dead ends with configurable boundary walls; exact even-width and UP/DOWN
+  openings, persisted restore data, reload recovery, automatic reopening on catalog changes,
+  `/il reopendeadends`, and closed-exit diagnostics. Budget exhaustion never proves a dead end.
+- Added variant-only Diversity connections and a two-corner connection wand, capture/load
+  editing and removal. Resolve block/connection choices before planning and persist them
+  for reservations, placed rooms and queued recovery. Alternatives can replace original doors.
+- Added catalog/terrain/frontier/topology/geometry tests and actual Paper wand/wall/recovery checks.
+
 ## 2.4.1
 
 - Fixed movement using the old player position instead of the destination.

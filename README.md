@@ -1,14 +1,30 @@
-# Infinity Library 2.4.1
+# Infinity Library 2.5
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.4.1.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.4.1-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.5.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.5.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Smarter room generation and Diversity doors (new in 2.5)
+
+Planning now considers every eligible room template, compares sibling layouts, checks
+candidate exits for continuation, and rejects placements proven to strand another placed
+room's open exit. Compatible neighboring doors connect directly as loops.
+
+Proven dead-end openings become configurable walls. Saved openings can be restored with
+`/il reopendeadends`, and base/catalog changes reopen them automatically before replanning.
+Diversity alternatives can have their own doors: capture a variation, run
+`/il diversityconnection <area> <variant> <direction> [floor] [id]`, then use the supplied
+wand on its opening corners. The chosen variant's doors and blocks are planned and saved together.
+
+**[Generation and variant-door guide](GENERATION.md)** includes wall configuration,
+authoring steps, editing, compatibility and bounded-search limits. Existing buildings
+retain their saved connections; no reset is required.
 
 ## Automatic exploration fixes (2.4.1)
 
@@ -247,7 +263,7 @@ plugin; they are not DRM against server administrators or other plugins.
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.4.1.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.5.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, planning, manuscripts, room catalogs, exact decoration

@@ -277,7 +277,7 @@ public class SelectionManager {
             BlockFace face = detectOutwardFace(min, max, bounds);
             int width = face == BlockFace.NORTH || face == BlockFace.SOUTH ? max.x() - min.x() + 1 : face == BlockFace.EAST || face == BlockFace.WEST ? max.z() - min.z() + 1 : Math.max(max.x() - min.x() + 1, max.z() - min.z() + 1);
             int height = face == BlockFace.UP || face == BlockFace.DOWN ? 1 : max.y() - min.y() + 1;
-            Vector3i center = new Vector3i((min.x() + max.x()) / 2, min.y(), (min.z() + max.z()) / 2);
+            Vector3i center = new Vector3i(min.x()+(max.x()-min.x()+1)/2, min.y(), min.z()+(max.z()-min.z()+1)/2);
             String prefix = connectionPrefixes.getOrDefault(playerId, "conn");
             int number = connectionCounters.merge(player.getUniqueId(), 1, Integer::sum);
             ConnectionPoint connectionPoint = new ConnectionPoint(prefix + "_" + number, center, face, width, height);

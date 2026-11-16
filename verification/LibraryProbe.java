@@ -307,11 +307,12 @@ public class LibraryProbe extends JavaPlugin {
         explorationChecks(p);
     }
     void explorationChecks(InfinityLibraryPlugin p) {
-        var main=p.getGenerationEngine();main.stop();
+        var main=p.getGenerationEngine();main.stop();p.getConfig().set("generation.path-blocking.enabled",false);
         var cfg=p.getConfig();cfg.set("generation.start-room-id","auto_start");cfg.set("generation.base-room-id","auto_room");cfg.set("start-location.x",10000);cfg.set("start-location.y",80);cfg.set("start-location.z",10000);cfg.set("proximity-radius",6);cfg.set("generation.max-total-rooms",3);cfg.set("generation.planning.max-doors",2);cfg.set("generation.placement-blocks-per-tick",1800);cfg.set("generation.exploration-check-interval-ticks",2);
         var doors=List.of(new ConnectionPoint("north",new Vector3i(5,1,0),org.bukkit.block.BlockFace.NORTH,3,3),new ConnectionPoint("east",new Vector3i(10,1,5),org.bukkit.block.BlockFace.EAST,3,3),new ConnectionPoint("south",new Vector3i(5,1,10),org.bukkit.block.BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,5),org.bukkit.block.BlockFace.WEST,3,3));
         List<RoomBlock> floor=new ArrayList<>();for(int x=0;x<11;x++)for(int z=0;z<11;z++)floor.add(new RoomBlock(new Vector3i(x,0,z),"minecraft:oak_planks"));
         try {var file=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);new Room("auto_start",RoomType.STARTING,new Vector3i(11,7,11),doors.subList(0,3),floor,List.of(),100).write(y.createSection("rooms.auto_start"));new Room("auto_room",RoomType.FILLER,new Vector3i(11,7,11),doors,floor,List.of(),100).write(y.createSection("rooms.auto_room"));y.save(file);p.getRoomManager().load();}catch(Exception ex){throw new RuntimeException(ex);}
+        for(int x=9970;x<10040;x++)for(int y=79;y<90;y++)for(int z=9970;z<10040;z++)main.ensureWorld().getBlockAt(x,y,z).setType(Material.AIR,false);
         Fake f=new Fake(p,true);f.online=false;var e=new com.infinitylibrary.engine.GenerationEngine(p,p.getRoomManager(),()->List.of(f.player));e.start();e.setPaused(false);e.resetToStart();
         later(()->{
             var world=e.ensureWorld();world.getBlockAt(10005,81,9999).setType(Material.STONE);
@@ -340,9 +341,64 @@ public class LibraryProbe extends JavaPlugin {
             f.position=near;Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerTeleportEvent(f.player,far,near,org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN));
             later(()->{
                 check(e.placedCount()==2,"teleport arrival triggers exploration");p.getConfig().set("generation.base-room-id","auto_start");check(e.explorationStatus().contains("STARTING"),"diagnostics identify STARTING template selected as expansion base");p.getConfig().set("generation.base-room-id","missing_auto");check(e.explorationStatus().contains("missing")||e.explorationStatus().contains("archived"),"diagnostics identify unavailable base template");p.getConfig().set("generation.base-room-id","auto_room");
-                getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();
+                topologyChecks(p);
             },3);
         },2);
+    }
+    void topologyChecks(InfinityLibraryPlugin p){
+        var cfg=p.getConfig();var e=p.getGenerationEngine();var world=e.ensureWorld();
+        cfg.set("generation.max-total-rooms",0);cfg.set("generation.path-blocking.enabled",true);cfg.set("generation.path-blocking.material","GOLD_BLOCK");cfg.set("generation.exploration-check-interval-ticks",2);cfg.set("generation.planning.max-doors",16);
+        cfg.set("start-location.x",20000);cfg.set("start-location.y",80);cfg.set("start-location.z",20000);cfg.set("generation.start-room-id","seal_start");cfg.set("generation.base-room-id","seal_normal");
+        List<RoomBlock> floor=new ArrayList<>();for(int x=0;x<7;x++)for(int z=0;z<7;z++)floor.add(new RoomBlock(new Vector3i(x,0,z),"minecraft:oak_planks"));
+        var east=new ConnectionPoint("east",new Vector3i(6,1,3),org.bukkit.block.BlockFace.EAST,3,3);var west=new ConnectionPoint("west",new Vector3i(0,1,3),org.bukkit.block.BlockFace.WEST,3,3);
+        Room start=new Room("seal_start",RoomType.STARTING,new Vector3i(7,5,7),List.of(new ConnectionPoint("north_even",new Vector3i(3,1,0),org.bukkit.block.BlockFace.NORTH,4,2),new ConnectionPoint("up_even",new Vector3i(3,4,3),org.bukkit.block.BlockFace.UP,2,1),east),floor,List.of(),100);
+        Room normal=new Room("seal_normal",RoomType.FILLER,start.size(),List.of(west,east),floor,List.of(),100);
+        try{var file=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);start.write(y.createSection("rooms.seal_start"));normal.write(y.createSection("rooms.seal_normal"));y.save(file);p.getRoomManager().load();}catch(Exception ex){throw new RuntimeException(ex);}
+        for(int x=19990;x<20025;x++)for(int y=79;y<90;y++)for(int z=19990;z<20025;z++)world.getBlockAt(x,y,z).setType(Material.AIR,false);
+        e.stop();e.start();e.resetToStart();
+        later(()->{
+            check(e.closedExitCount()==2,"only proven impossible cardinal and vertical exits are sealed");
+            int gold=0;for(int x=20001;x<=20004;x++)for(int y=81;y<=82;y++)if(world.getBlockAt(x,y,20000).getType()==Material.GOLD_BLOCK)gold++;
+            check(gold==8&&world.getBlockAt(20005,81,20000).getType()==Material.AIR,"dead-end wall uses configured material and exact even width/height");
+            check(world.getBlockAt(20002,84,20002).getType()==Material.GOLD_BLOCK&&world.getBlockAt(20003,84,20003).getType()==Material.GOLD_BLOCK,"vertical dead-end fills exact square on its room boundary");
+            check(world.getBlockAt(20002,81,19999).getType()==Material.AIR&&e.openExitCount()==1,"wall stays inside its room and viable exit stays open");
+            e.stop();e.start();
+            later(()->{
+                check(e.closedExitCount()==2&&world.getBlockAt(20002,81,20000).getType()==Material.GOLD_BLOCK,"closed doors and wall recovery survive engine reload");
+                cfg.set("generation.path-blocking.enabled",false);e.replanFutureRooms();check(e.closedExitCount()==0&&world.getBlockAt(20002,81,20000).isEmpty(),"replanning restores the saved original opening without resetting library");
+                diversityDoorChecks(p,floor,east,west);
+            },4);
+        },12);
+    }
+    void diversityDoorChecks(InfinityLibraryPlugin p,List<RoomBlock> floor,ConnectionPoint east,ConnectionPoint west){
+        var e=p.getGenerationEngine();var rooms=p.getRoomManager();var diversity=p.getDiversityManager();var world=e.ensureWorld();Fake f=new Fake(p,true);var author=f.player;
+        Vector3i origin=new Vector3i(22000,80,22000);rooms.setPos1(author,origin.toLocation(world));rooms.setPos2(author,origin.add(new Vector3i(6,4,6)).toLocation(world));p.getSelectionManager().clearStagedConnections(author);p.getPropManager().clear(author);diversity.clear(author);
+        f.items[0]=diversity.wand();diversity.mode(author,"eastwall","open",1);
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(22006,81,22002));diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(22006,83,22004));
+        for(int y=81;y<=83;y++)for(int z=23000;z<=23002;z++)world.getBlockAt(23000,y,z).setType(Material.STONE,false);
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(23000,81,23000));diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(23000,83,23002));
+        f.items[0]=diversity.connectionWand(author,"eastwall","open","EAST",0,"door");
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(23000,81,23000));diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(23000,83,23002));
+        var staged=diversity.staged(author).getFirst();var variant=staged.variants().getFirst();
+        check(variant.connections().size()==1&&variant.connections().getFirst().width()==3&&variant.connections().getFirst().height()==3,"Diversity Connection Wand captures variant-source doorway coordinates and dimensions");
+        check(variant.blocks().isEmpty(),"marking a Diversity connection clears captured blocks from its opening");
+        Room normal=new Room("div_door_room",RoomType.FILLER,new Vector3i(7,5,7),List.of(west),floor,List.of(),100,List.of(),List.of(new DiversityArea(staged.id(),staged.min(),staged.size(),0,staged.variants())));
+        Room start=new Room("div_door_start",RoomType.STARTING,normal.size(),List.of(east),floor,List.of(),100);
+        try{var file=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);normal.write(y.createSection("rooms.div_door_room"));start.write(y.createSection("rooms.div_door_start"));y.save(file);rooms.load();}catch(Exception ex){throw new RuntimeException(ex);}
+        var cfg=p.getConfig();cfg.set("generation.start-room-id",start.id());cfg.set("generation.base-room-id",normal.id());cfg.set("start-location.x",24000);cfg.set("start-location.z",24000);
+        for(int x=23990;x<24030;x++)for(int y=79;y<87;y++)for(int z=23990;z<24030;z++)world.getBlockAt(x,y,z).setType(Material.AIR,false);
+        e.resetToStart();later(()->{
+            check(e.placeRoomImmediately(normal.id()),"planner places room with resolved variant topology");
+            later(()->{
+                var file=p.getDataFolder().toPath().resolve("generated.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);var child=y.getConfigurationSection("rooms.1");
+                check(child.getString("diversity.eastwall.choice").equals("open")&&child.getConfigurationSection("connections").getKeys(false).size()==2,"placed room freezes selected variant and both active connections");
+                check(e.plannedCount()>0,"lookahead reserves continuation from effective variant connections");
+                String snapshot=child.getConfigurationSection("connections").getValues(true).toString();rooms.updateDiversity(normal.id(),List.of());e.stop();e.start();
+                var recovered=YamlConfiguration.loadConfiguration(file).getConfigurationSection("rooms.1");check(snapshot.equals(recovered.getConfigurationSection("connections").getValues(true).toString()),"placed variant doors remain unchanged after template edits and reload");
+                check(e.placeRoomImmediately(normal.id()),"library can expand through frozen variant topology after authoring edits");
+                later(()->{getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();},4);
+            },5);
+        },3);
     }
     final class Fake implements InvocationHandler {
         final InfinityLibraryPlugin plugin; final UUID id=UUID.randomUUID(); final boolean admin;

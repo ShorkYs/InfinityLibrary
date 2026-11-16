@@ -1,10 +1,10 @@
-# Version 2.4.1 verification — 2026-11-16
+# Version 2.5.0 verification — 2026-11-16
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
 ## Clean build and automated tests
 
-`build` passed with **54 JUnit tests**, zero failures:
+`clean build` plus final incremental `build` passed with **67 JUnit tests**, zero failures:
 
 - 38 retained geometry, room-planning/catalog, manuscript and prop-packing/persistence tests.
 - 7 exact-decoration tests: reject smaller entries, require category and all dimensions,
@@ -15,7 +15,23 @@ Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
   trips, overlap/door protection, malformed data and legacy reads.
 
 Fixed Gradle resource-input tracking for the plugin version. The clean release JAR's
-`plugin.yml` was inspected and reports **2.4.1**, matching the actual release filename.
+`plugin.yml` was inspected and reports **2.5.0**, matching the actual release filename.
+
+## Planner, dead-end and Diversity-door tests (2.5)
+
+13 additional JUnit tests cover all-catalog coverage beyond old caps, unknown versus blocked
+terrain, connection budgets, loops, preserving another parent's last continuation through
+the actual search helper, variant topology enumeration, using a variant door as an entrance,
+closed/original door alternatives, snapshot/template-edit stability, incomplete enumeration,
+invalid doorway bounds, even-width/vertical geometry and transforms, and deferring unknown
+preservation checks. Terrain functions are injected for these pure tests.
+
+The disposable Paper run additionally tested exact GOLD_BLOCK walls, cardinal even widths,
+vertical square openings, remaining viable exits, no blocks outside the room, close/restore
+persistence across engine reload, replanning restoration, the actual variant-source wand,
+clearing a captured wall opening, pre-placement variant snapshots, future reservations,
+template edits and expansion through frozen variant doors. Player events are simulated,
+with real Paper world/scheduler/configuration behavior. No Minecraft client was connected.
 
 ## Exploration regression checks
 
@@ -28,7 +44,7 @@ No real client connected and the user's particular server configuration is unver
 
 ## Actual Paper server checks
 
-The final correctly labeled 2.4.1 JAR passed **114 integration assertions**, including:
+The final correctly labeled 2.5.0 JAR passed **127 integration assertions**, including:
 
 - Four-click Diversity capture with an external source, rejected dimension mismatch,
   prevention of silently saving an incomplete capture, multiple/empty alternatives,

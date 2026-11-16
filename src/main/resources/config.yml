@@ -17,16 +17,23 @@ generation:
   planning:
     # Search sibling layouts before placing a room. Values are bounded internally.
     beam-width: 12
+    # Retained alternatives PER TEMPLATE per door, so every eligible room is considered.
     candidates-per-door: 12
+    topology-choices-per-room: 64
+    connection-check-budget: 200000
     max-doors: 16
-    world-block-budget: 150000
+    world-block-budget: 300000
   start-room-id: "builtin_start"
   # Empty string restores mixed room-template selection.
   base-room-id: "builtin_modular"
   sign-min-rooms: 6
+  # Proven unfillable openings are replaced on their own room boundary.
+  # /il reopendeadends restores them. Base/catalog changes reopen automatically.
   path-blocking:
     enabled: true
     material: "SMOOTH_STONE"
+    # Optional full block state overrides material, e.g. minecraft:oak_planks
+    # block-data: "minecraft:stone_bricks"
 gui:
   title: "&5Infinity Library"
   size: 27

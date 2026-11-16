@@ -13,17 +13,19 @@ import java.util.*;
 /** Target two corners, then source two corners. Source selection may be outside the room. */
 public final class DiversityManager {
     private final InfinityLibraryPlugin plugin;
-    private final NamespacedKey wandKey;
+    private final NamespacedKey wandKey,connectionKey;
     private final Map<UUID,Session> sessions=new HashMap<>();
     private record Context(UUID world,Vector3i min,Vector3i max) {Vector3i size(){return max.subtract(min).add(new Vector3i(1,1,1));}}
     private static final class Session {
         Context context;String areaId="area_1",variantId="variant_1";double weight=1;
         Vector3i firstTarget,firstSource;DiversityArea target;
+        String connectionArea,connectionVariant,connectionId;org.bukkit.block.BlockFace connectionFace;int connectionFloor;Vector3i connectionFirst;
+        final Map<String,Vector3i> sources=new HashMap<>();
         final Map<String,DiversityArea> staged=new LinkedHashMap<>();
     }
-    public DiversityManager(InfinityLibraryPlugin plugin){this.plugin=plugin;wandKey=new NamespacedKey(plugin,"room_diversity_wand");}
+    public DiversityManager(InfinityLibraryPlugin plugin){this.plugin=plugin;wandKey=new NamespacedKey(plugin,"room_diversity_wand");connectionKey=new NamespacedKey(plugin,"diversity_connection_wand");}
     private Context context(Player p){var b=plugin.getRoomManager().selectionBounds(p);return new Context(p.getWorld().getUID(),b.min(),b.max());}
-    private Session session(Player p){Context c=context(p);Session s=sessions.computeIfAbsent(p.getUniqueId(),id -> new Session());if(!c.equals(s.context)){s.firstTarget=null;s.firstSource=null;s.target=null;s.staged.clear();s.context=c;}return s;}
+    private Session session(Player p){Context c=context(p);Session s=sessions.computeIfAbsent(p.getUniqueId(),id -> new Session());if(!c.equals(s.context)){s.firstTarget=null;s.firstSource=null;s.target=null;s.staged.clear();s.sources.clear();s.connectionArea=null;s.connectionFirst=null;s.context=c;}return s;}
     public void clear(Player p){sessions.remove(p.getUniqueId());}
     public void mode(Player p,String areaId,String variantId,double weight){
         new DiversityArea(areaId,new Vector3i(0,0,0),new Vector3i(1,1,1),1,List.of(new DiversityVariant(variantId,weight,List.of())));
@@ -44,11 +46,12 @@ public final class DiversityManager {
     public void load(Player p,String roomId){
         Room room=plugin.getRoomManager().getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));Session s=session(p);
         if(!room.size().equals(s.context.size()))throw new IllegalArgumentException("Select the authoring room with the saved template's exact dimensions.");
-        s.staged.clear();for(DiversityArea a:room.diversityAreas())s.staged.put(a.id(),a);s.target=null;s.firstTarget=null;s.firstSource=null;
+        s.sources.clear();s.connectionArea=null;s.connectionFirst=null;s.staged.clear();for(DiversityArea a:room.diversityAreas())s.staged.put(a.id(),a);s.target=null;s.firstTarget=null;s.firstSource=null;
     }
     public ItemStack wand(){ItemStack item=new ItemStack(Material.PRISMARINE_SHARD);var meta=item.getItemMeta();meta.setDisplayName("§dRoom Diversity Wand");meta.setLore(List.of("§71 + 2: target corners inside your room","§73 + 4: equally sized variation source","§7Source can be elsewhere in the same world","§7/il diversitymode <area> <variant> [weight]"));meta.getPersistentDataContainer().set(wandKey,PersistentDataType.BYTE,(byte)1);item.setItemMeta(meta);return item;}
     public boolean handle(Player p,Action action,Block clicked){
-        ItemStack held=p.getInventory().getItemInMainHand();if(clicked==null||held==null||!held.hasItemMeta()||!held.getItemMeta().getPersistentDataContainer().has(wandKey,PersistentDataType.BYTE))return false;
+        ItemStack held=p.getInventory().getItemInMainHand();
+        if(held!=null&&held.hasItemMeta()&&held.getItemMeta().getPersistentDataContainer().has(connectionKey,PersistentDataType.BYTE))return handleConnection(p,action,clicked);if(clicked==null||held==null||!held.hasItemMeta()||!held.getItemMeta().getPersistentDataContainer().has(wandKey,PersistentDataType.BYTE))return false;
         if(action!=Action.LEFT_CLICK_BLOCK&&action!=Action.RIGHT_CLICK_BLOCK)return false;
         if(!p.hasPermission("infinitylibrary.admin")){p.sendMessage("§cMissing permission infinitylibrary.admin");return true;}
         try{
@@ -74,10 +77,48 @@ public final class DiversityManager {
             DiversityArea updated=s.target.withVariant(new DiversityVariant(s.variantId,s.weight,blocks));
             List<DiversityArea> all=new ArrayList<>(s.staged.values());all.removeIf(a -> a.id().equals(updated.id()));all.add(updated);
             Room.validateDiversityAreas(s.context.size(),plugin.getSelectionManager().stagedConnections(p),plugin.getPropManager().staged(p),plugin.getSelectionManager().stagedVariations(p),all);
-            s.staged.put(updated.id(),updated);s.target=null;
+            s.sources.put(updated.id()+"/"+s.variantId,sourceMin);s.staged.put(updated.id(),updated);s.target=null;
             p.sendMessage("§aCaptured Diversity "+updated.id()+" / "+s.variantId+" ("+sourceSize+"). Save the room, or /il applydiversity <roomId>. Add another with /il diversityvariant <area> <variant>.");
         }catch(IllegalArgumentException e){p.sendMessage("§c"+e.getMessage());}return true;
     }
+    public ItemStack connectionWand(Player p,String areaId,String variantId,String direction,int floor,String id){
+        Session s=session(p);if(s.target!=null||s.firstTarget!=null)throw new IllegalArgumentException("Finish capturing the variation first.");
+        DiversityArea area=s.staged.get(areaId);if(area==null||area.variants().stream().noneMatch(v -> v.id().equals(variantId)))throw new IllegalArgumentException("Capture or load this area/variant first.");
+        if(!id.matches("[a-z0-9_-]{1,48}"))throw new IllegalArgumentException("Connection ID needs lowercase letters/digits/_/-.");
+        org.bukkit.block.BlockFace face;try{face=org.bukkit.block.BlockFace.valueOf(direction.toUpperCase(Locale.ROOT));}catch(IllegalArgumentException ex){throw new IllegalArgumentException("Direction must be NORTH/EAST/SOUTH/WEST/UP/DOWN.");}
+        new ConnectionPoint(id,new Vector3i(0,0,0),face,1,1,floor);
+        s.connectionArea=areaId;s.connectionVariant=variantId;s.connectionFace=face;s.connectionFloor=floor;s.connectionId=id;s.connectionFirst=null;
+        ItemStack item=new ItemStack(Material.BLAZE_ROD);var meta=item.getItemMeta();meta.setDisplayName("§dDiversity Connection Wand");meta.setLore(List.of("§7Click two opposite opening corners","§7"+areaId+" / "+variantId+" / "+direction,"§7Saved with this variation only"));meta.getPersistentDataContainer().set(connectionKey,PersistentDataType.BYTE,(byte)1);item.setItemMeta(meta);
+        p.sendMessage("§dClick opening corners on "+(s.sources.containsKey(areaId+"/"+variantId)?"the captured variation SOURCE":"the TARGET area (loaded variation coordinates)")+". Then save/apply Diversity.");return item;
+    }
+    private boolean handleConnection(Player p,Action action,Block clicked){
+        if(clicked==null||(action!=Action.LEFT_CLICK_BLOCK&&action!=Action.RIGHT_CLICK_BLOCK))return false;
+        if(!p.hasPermission("infinitylibrary.admin")){p.sendMessage("§cMissing permission infinitylibrary.admin");return true;}
+        try{
+            Session s=session(p);if(s.connectionArea==null)throw new IllegalArgumentException("Use /il diversityconnection <area> <variant> <direction> [floor] [id] first.");
+            DiversityArea area=s.staged.get(s.connectionArea);Vector3i origin=s.sources.getOrDefault(s.connectionArea+"/"+s.connectionVariant,s.context.min().add(area.min()));
+            if(!clicked.getWorld().getUID().equals(s.context.world()))throw new IllegalArgumentException("Use the selected room world.");
+            Vector3i point=Vector3i.from(clicked.getLocation()).subtract(origin);
+            if(point.x()<0||point.y()<0||point.z()<0||point.x()>=area.size().x()||point.y()>=area.size().y()||point.z()>=area.size().z())throw new IllegalArgumentException("Opening corners must stay inside the variation area.");
+            if(s.connectionFirst==null){s.connectionFirst=point;p.sendMessage("§dConnection corner 1 set. Click opposite opening corner.");return true;}
+            Vector3i a=min(s.connectionFirst,point),z=size(s.connectionFirst,point);s.connectionFirst=null;
+            int width,height;Vector3i center;
+            switch(s.connectionFace){
+                case NORTH,SOUTH -> {if(z.z()!=1)throw new IllegalArgumentException("North/south openings need a single Z plane.");width=z.x();height=z.y();center=a.add(new Vector3i(width/2,0,0));}
+                case EAST,WEST -> {if(z.x()!=1)throw new IllegalArgumentException("East/west openings need a single X plane.");width=z.z();height=z.y();center=a.add(new Vector3i(0,0,width/2));}
+                default -> {if(z.y()!=1||z.x()!=z.z())throw new IllegalArgumentException("Up/down openings need a square in one Y plane.");width=z.x();height=1;center=a.add(new Vector3i(width/2,0,width/2));}
+            }
+            ConnectionPoint cp=new ConnectionPoint(s.connectionId,center,s.connectionFace,width,height,s.connectionFloor);
+            DiversityVariant old=area.variants().stream().filter(v -> v.id().equals(s.connectionVariant)).findFirst().orElseThrow();
+            List<ConnectionPoint> cps=new ArrayList<>(old.connections());cps.removeIf(c -> c.id().equals(cp.id()));cps.add(cp);
+            // Clear captured opening cells so metadata cannot create an invisible doorway through solid blocks.
+            Set<Vector3i> opening=new HashSet<>(cp.cells());List<RoomBlock> blocks=old.blocks().stream().filter(b -> !opening.contains(b.position())).toList();
+            DiversityArea updated=area.withVariant(new DiversityVariant(old.id(),old.weight(),blocks,cps));validateStaged(p,s,updated);s.staged.put(area.id(),updated);
+            p.sendMessage("§aVariant connection "+cp.id()+" staged: "+cp.direction()+" "+width+"x"+height+" floor "+cp.floor()+". Save room or /il applydiversity <roomId>.");
+        }catch(IllegalArgumentException ex){p.sendMessage("§c"+ex.getMessage());}return true;
+    }
+    private void validateStaged(Player p,Session s,DiversityArea updated){List<DiversityArea> all=new ArrayList<>(s.staged.values());all.removeIf(a -> a.id().equals(updated.id()));all.add(updated);Room.validateDiversityAreas(s.context.size(),plugin.getSelectionManager().stagedConnections(p),plugin.getPropManager().staged(p),plugin.getSelectionManager().stagedVariations(p),all);}
+    public void removeConnection(Player p,String areaId,String variantId,String id){Session s=session(p);DiversityArea a=s.staged.get(areaId);if(a==null)throw new IllegalArgumentException("Load or capture area first.");DiversityVariant v=a.variants().stream().filter(x -> x.id().equals(variantId)).findFirst().orElseThrow(() -> new IllegalArgumentException("Variant not found"));if(v.connections().stream().noneMatch(c -> c.id().equals(id)))throw new IllegalArgumentException("Connection not found");s.staged.put(areaId,a.withVariant(new DiversityVariant(v.id(),v.weight(),v.blocks(),v.connections().stream().filter(c -> !c.id().equals(id)).toList())));}
     public void apply(Player p,String roomId){
         Room room=plugin.getRoomManager().getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));Session s=session(p);
         if(!room.size().equals(s.context.size()))throw new IllegalArgumentException("Whole-room selection must match saved room dimensions.");

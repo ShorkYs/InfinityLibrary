@@ -37,7 +37,7 @@ public class GUIManager {
         writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
         writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
         if(player.hasPermission("infinitylibrary.admin")) {
-            writer.icon(inv,42,Material.PRISMARINE_SHARD,"§6Room Diversity","§7Capture a target and its same-size alternatives");
+            writer.icon(inv,42,Material.PRISMARINE_SHARD,"§6Room Diversity","§7Capture a target and its same-size alternatives","§7Optional variant doors: /il diversityconnection");
             writer.icon(inv,44,Material.ARMOR_STAND,"§6Room props","§7Reusable props and placeholder area wand");
             writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
             writer.icon(inv,48,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"§aResume expansion":"§ePause expansion","§7Queued block placement continues");
@@ -190,7 +190,7 @@ public class GUIManager {
         inv.setItem(20,item(Material.BRICKS,"&eUse As Expansion Base",List.of("&7Leaves the STARTING choice unchanged.","&7STARTING rooms cannot be a base.")));
         inv.setItem(22,item(Material.ARROW,"&eRoom List",List.of()));
         inv.setItem(24,item(Material.NAME_TAG,"&eChange Room Type",List.of("&e/il roomtype "+roomId+" <type>","&7STARTING, FILLER, BOOK or READ")));
-        inv.setItem(25,item(Material.PRISMARINE_SHARD,"&dRoom Diversity",List.of("&e/il diversityload "+roomId,"&e/il applydiversity "+roomId)));
+        inv.setItem(25,item(Material.PRISMARINE_SHARD,"&dRoom Diversity",List.of("&e/il diversityload "+roomId,"&e/il applydiversity "+roomId,"&7Optional doors: /il diversityconnection")));
         player.openInventory(inv);
     }
     public void roomMenuAction(Player p,LibraryMenu menu,int slot,boolean remove) {

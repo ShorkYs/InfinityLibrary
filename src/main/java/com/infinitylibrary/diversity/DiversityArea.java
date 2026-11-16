@@ -12,6 +12,7 @@ public record DiversityArea(String id,Vector3i min,Vector3i size,double original
         if(!Double.isFinite(originalWeight)||originalWeight<0||originalWeight>1000000)throw new IllegalArgumentException("Original weight must be 0–1,000,000.");
         variants=List.copyOf(variants);if(variants.size()>16)throw new IllegalArgumentException("At most 16 alternatives per Diversity area.");
         Set<String> ids=new HashSet<>();for(DiversityVariant v:variants){if(!ids.add(v.id()))throw new IllegalArgumentException("Duplicate Diversity variant: "+v.id());
+            for(ConnectionPoint cp:v.connections())if(!cp.cells().stream().allMatch(p -> p.x()>=0&&p.y()>=0&&p.z()>=0&&p.x()<size.x()&&p.y()<size.y()&&p.z()<size.z()))throw new IllegalArgumentException("Variant doorway must fit fully within its Diversity area.");
             Set<Vector3i> positions=new HashSet<>();for(RoomBlock b:v.blocks())if(!positions.add(b.position())||b.position().x()<0||b.position().y()<0||b.position().z()<0||b.position().x()>=size.x()||b.position().y()>=size.y()||b.position().z()>=size.z())throw new IllegalArgumentException("Variation block outside source bounds or duplicated");}
     }
     public void requireSourceSize(Vector3i actual) {if(!size.equals(actual))throw new IllegalArgumentException("Variation size must match X,Y,Z exactly: expected "+size+", selected "+actual+". Select two source corners again.");}
