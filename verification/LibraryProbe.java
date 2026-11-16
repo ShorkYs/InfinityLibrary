@@ -304,13 +304,51 @@ public class LibraryProbe extends JavaPlugin {
         p.getRoomManager().appendVariations("probe_diversity",List.of(new VariationArea("legacy_cleanup","decor",100,List.of(new RoomBlock(new Vector3i(8,1,8),"minecraft:stone")))));
         p.getRoomManager().removeVariation("probe_diversity","legacy_cleanup");
         check(p.getRoomManager().getActive("probe_diversity").orElseThrow().diversityAreas().size()==1&&p.getRoomManager().getActive("probe_diversity").orElseThrow().variations().stream().noneMatch(v -> v.id().equals("legacy_cleanup")),"legacy-variation removal preserves Room Diversity metadata");
-        getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();
+        explorationChecks(p);
+    }
+    void explorationChecks(InfinityLibraryPlugin p) {
+        var main=p.getGenerationEngine();main.stop();
+        var cfg=p.getConfig();cfg.set("generation.start-room-id","auto_start");cfg.set("generation.base-room-id","auto_room");cfg.set("start-location.x",10000);cfg.set("start-location.y",80);cfg.set("start-location.z",10000);cfg.set("proximity-radius",6);cfg.set("generation.max-total-rooms",3);cfg.set("generation.planning.max-doors",2);cfg.set("generation.placement-blocks-per-tick",1800);cfg.set("generation.exploration-check-interval-ticks",2);
+        var doors=List.of(new ConnectionPoint("north",new Vector3i(5,1,0),org.bukkit.block.BlockFace.NORTH,3,3),new ConnectionPoint("east",new Vector3i(10,1,5),org.bukkit.block.BlockFace.EAST,3,3),new ConnectionPoint("south",new Vector3i(5,1,10),org.bukkit.block.BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,5),org.bukkit.block.BlockFace.WEST,3,3));
+        List<RoomBlock> floor=new ArrayList<>();for(int x=0;x<11;x++)for(int z=0;z<11;z++)floor.add(new RoomBlock(new Vector3i(x,0,z),"minecraft:oak_planks"));
+        try {var file=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);new Room("auto_start",RoomType.STARTING,new Vector3i(11,7,11),doors.subList(0,3),floor,List.of(),100).write(y.createSection("rooms.auto_start"));new Room("auto_room",RoomType.FILLER,new Vector3i(11,7,11),doors,floor,List.of(),100).write(y.createSection("rooms.auto_room"));y.save(file);p.getRoomManager().load();}catch(Exception ex){throw new RuntimeException(ex);}
+        Fake f=new Fake(p,true);f.online=false;var e=new com.infinitylibrary.engine.GenerationEngine(p,p.getRoomManager(),()->List.of(f.player));e.start();e.setPaused(false);e.resetToStart();
+        later(()->{
+            var world=e.ensureWorld();world.getBlockAt(10005,81,9999).setType(Material.STONE);
+            f.position=new Location(world,10006.5,81.5,10001.5);f.online=true;e.tickPlayer(f.player);
+            check(e.placedCount()==2,"blocked nearest exit does not starve a viable sibling exit");
+            later(()->{
+                cfg.set("proximity-radius",1.2);f.position=new Location(world,10005.5,81.5,10010.5);e.tickPlayer(f.player);
+                check(e.placedCount()==3,"sibling doorway can plan immediately despite failed-door cooldown and distant reservations");
+                e.stop();cfg.set("generation.placement-blocks-per-tick",4);cfg.set("generation.max-total-rooms",2);f.position=new Location(world,10010.5,81.5,10005.5);e.start();e.resetToStart();e.tickPlayer(f.player);check(e.placedCount()==1&&e.queuedBlocks()>0,"explorer initially waits while entrance construction is queued");
+                later(()->{
+                    check(e.placedCount()==2,"scheduled proximity scan expands for a stationary explorer after queue drains");
+                    later(()->{
+                        check(e.placedCount()==2,"periodic exploration respects built-room cap");e.stop();cfg.set("generation.placement-blocks-per-tick",1800);main.start();main.resetToStart();
+                        later(()->movementChecks(p,f),2);
+                    },45);
+                },45);
+            },2);
+        },2);
+    }
+    void movementChecks(InfinityLibraryPlugin p,Fake f) {
+        var e=p.getGenerationEngine();var world=e.ensureWorld();Location far=new Location(world,10100,81,10100),near=new Location(world,10010.5,81.5,10005.5);f.position=far;
+        Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerMoveEvent(f.player,far,near));
+        check(e.placedCount()==2,"movement uses destination rather than stale player location");e.resetToStart();
+        later(()->{
+            var cancelled=new org.bukkit.event.player.PlayerMoveEvent(f.player,far,near);cancelled.setCancelled(true);Bukkit.getPluginManager().callEvent(cancelled);check(e.placedCount()==1,"cancelled movement does not generate rooms");
+            f.position=near;Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerTeleportEvent(f.player,far,near,org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN));
+            later(()->{
+                check(e.placedCount()==2,"teleport arrival triggers exploration");p.getConfig().set("generation.base-room-id","auto_start");check(e.explorationStatus().contains("STARTING"),"diagnostics identify STARTING template selected as expansion base");p.getConfig().set("generation.base-room-id","missing_auto");check(e.explorationStatus().contains("missing")||e.explorationStatus().contains("archived"),"diagnostics identify unavailable base template");p.getConfig().set("generation.base-room-id","auto_room");
+                getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();
+            },3);
+        },2);
     }
     final class Fake implements InvocationHandler {
         final InfinityLibraryPlugin plugin; final UUID id=UUID.randomUUID(); final boolean admin;
         final ItemStack[] items=new ItemStack[36];
         final Player player; final PlayerInventory inventory; final InventoryView view;
-        Inventory top; Object dialog;
+        Inventory top; Object dialog; Location position; boolean online=true;
         Fake(InfinityLibraryPlugin p,boolean admin) {
             this.plugin=p; this.admin=admin;
             inventory=(PlayerInventory)Proxy.newProxyInstance(getClassLoader(),new Class[]{PlayerInventory.class},(o,m,a) -> inventoryCall(m,a));
@@ -338,8 +376,8 @@ public class LibraryProbe extends JavaPlugin {
             return switch(m.getName()) {
                 case "getUniqueId" -> id; case "getName" -> admin?"TestAuthor":"TestReader";
                 case "hasPermission" -> a[0].equals("infinitylibrary.command") || admin;
-                case "isOnline" -> true; case "getInventory" -> inventory; case "getOpenInventory" -> view;
-                case "getWorld" -> plugin.getGenerationEngine().ensureWorld(); case "getLocation" -> plugin.getGenerationEngine().homeLocation();
+                case "isOnline" -> online; case "getInventory" -> inventory; case "getOpenInventory" -> view;
+                case "getWorld" -> plugin.getGenerationEngine().ensureWorld(); case "getLocation" -> position==null?plugin.getGenerationEngine().homeLocation():position.clone();
                 case "openInventory" -> {top=(Inventory)a[0];yield view;}
                 case "showDialog" -> {dialog=a[0];yield null;}
                 case "equals" -> o==a[0]; case "hashCode" -> id.hashCode();

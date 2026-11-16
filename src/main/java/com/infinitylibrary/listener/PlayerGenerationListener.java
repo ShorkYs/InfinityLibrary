@@ -1,17 +1,20 @@
 package com.infinitylibrary.listener;
 
 import com.infinitylibrary.InfinityLibraryPlugin;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.*;
+import org.bukkit.event.player.*;
 
 public class PlayerGenerationListener implements Listener {
     private final InfinityLibraryPlugin plugin;
-    public PlayerGenerationListener(InfinityLibraryPlugin plugin) { this.plugin = plugin; }
-    @EventHandler public void onMove(PlayerMoveEvent e) {
-        if (e.getTo() == null || e.getFrom().getBlockX() == e.getTo().getBlockX() && e.getFrom().getBlockY() == e.getTo().getBlockY() && e.getFrom().getBlockZ() == e.getTo().getBlockZ()) return;
-        plugin.getGenerationEngine().tickPlayer(e.getPlayer());
+    public PlayerGenerationListener(InfinityLibraryPlugin plugin){this.plugin=plugin;}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void onMove(PlayerMoveEvent event) {
+        if(event.isCancelled()||event.getTo()==null||event.getFrom().getWorld()==event.getTo().getWorld()&&event.getFrom().getBlockX()==event.getTo().getBlockX()&&event.getFrom().getBlockY()==event.getTo().getBlockY()&&event.getFrom().getBlockZ()==event.getTo().getBlockZ())return;
+        plugin.getGenerationEngine().tickPlayer(event.getPlayer(),event.getTo());
     }
-    @EventHandler public void onJoin(PlayerJoinEvent e) { plugin.getGenerationEngine().tickPlayer(e.getPlayer()); }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void onTeleport(PlayerTeleportEvent event) {
+        plugin.getServer().getScheduler().runTask(plugin,() -> {if(event.getPlayer().isOnline())plugin.getGenerationEngine().tickPlayer(event.getPlayer());});
+    }
+    @EventHandler public void onJoin(PlayerJoinEvent event) {
+        plugin.getServer().getScheduler().runTask(plugin,() -> {if(event.getPlayer().isOnline())plugin.getGenerationEngine().tickPlayer(event.getPlayer());});
+    }
 }

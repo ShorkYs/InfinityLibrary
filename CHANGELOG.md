@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.1
+
+- Fixed movement using the old player position instead of the destination.
+- Added bounded periodic proximity checks, plus join/teleport arrival checks.
+- Try nearby planned sibling exits when the closest door cannot expand; retry cooldowns
+  are per door, and distant reservations no longer consume the built-room allowance.
+- Added `/il diagnose`, expansion state in `/il status`, startup eligibility warnings,
+  and connection dimensions/floors in `/il roominfo`.
+- Added disposable Paper scheduler and movement-event regression checks.
+
 ## 2.4.0
 
 - Added Room Diversity: paired target/source corner selections with exact X/Y/Z checks,

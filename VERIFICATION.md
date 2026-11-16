@@ -1,10 +1,10 @@
-# Version 2.4.0 verification — 2026-11-16
+# Version 2.4.1 verification — 2026-11-16
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
 ## Clean build and automated tests
 
-`clean build` passed with **54 JUnit tests**, zero failures:
+`build` passed with **54 JUnit tests**, zero failures:
 
 - 38 retained geometry, room-planning/catalog, manuscript and prop-packing/persistence tests.
 - 7 exact-decoration tests: reject smaller entries, require category and all dimensions,
@@ -15,11 +15,20 @@ Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
   trips, overlap/door protection, malformed data and legacy reads.
 
 Fixed Gradle resource-input tracking for the plugin version. The clean release JAR's
-`plugin.yml` was inspected and reports **2.4.0**, matching the actual release filename.
+`plugin.yml` was inspected and reports **2.4.1**, matching the actual release filename.
+
+## Exploration regression checks
+
+Real Paper scheduler/event dispatch with proxy players verified: a blocked nearest exit
+allows a viable sibling, cooldowns do not block sibling planning, reservations do not
+consume the built-room cap, stationary exploration resumes after queued construction,
+the cap remains enforced, movement uses its destination, cancelled moves do not generate,
+teleport arrivals trigger expansion, and diagnostics identify unavailable/STARTING bases.
+No real client connected and the user's particular server configuration is unverified.
 
 ## Actual Paper server checks
 
-The final correctly labeled 2.4.0 JAR passed **104 integration assertions**, including:
+The final correctly labeled 2.4.1 JAR passed **114 integration assertions**, including:
 
 - Four-click Diversity capture with an external source, rejected dimension mismatch,
   prevention of silently saving an incomplete capture, multiple/empty alternatives,

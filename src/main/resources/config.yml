@@ -8,6 +8,8 @@ start-location:
 proximity-radius: 9.0
 generation:
   max-rooms-per-tick: 1
+  # Recheck explorers even when they stand still after construction/teleport.
+  exploration-check-interval-ticks: 5
   # 0 means unlimited; placement waits for the current room to finish.
   max-total-rooms: 0
   placement-blocks-per-tick: 1800
