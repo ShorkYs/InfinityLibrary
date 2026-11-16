@@ -5,6 +5,9 @@ import java.util.Set;
 import java.util.UUID;
 
 public class PlacedRoom {
+    private com.infinitylibrary.diversity.DiversityComposition diversity;
+    public com.infinitylibrary.diversity.DiversityComposition diversity() {return diversity;}
+    public void diversity(com.infinitylibrary.diversity.DiversityComposition value) {diversity=value;}
     private com.infinitylibrary.props.PropComposition props;
     public com.infinitylibrary.props.PropComposition props() { return props; }
     public void props(com.infinitylibrary.props.PropComposition props) { this.props=props; }

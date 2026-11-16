@@ -3,6 +3,7 @@ import com.infinitylibrary.gui.LibraryMenu;
 import com.infinitylibrary.listener.GUIListener;
 import com.infinitylibrary.writing.*;
 import com.infinitylibrary.props.*;
+import com.infinitylibrary.diversity.*;
 import com.infinitylibrary.model.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.block.data.Directional;
@@ -65,6 +66,7 @@ public class LibraryProbe extends JavaPlugin {
             fake.items[0]=manager.wand();manager.mode(author,"library",0,"test",false);
             manager.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,engine.ensureWorld().getBlockAt(1001,81,1001));
             manager.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,engine.ensureWorld().getBlockAt(1002,83,1002));
+            check(fake.dialog!=null,"decoration category dialog opens after its two corner clicks");manager.category(author,"library",false);
             check(manager.staged(author).size()==1&&manager.staged(author).getFirst().size().equals(new Vector3i(2,3,2)),"area wand stages correctly sized room-local bounds");
             Fake denied=new Fake(p,false);denied.items[0]=manager.wand();
             check(manager.handle(denied.player,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,engine.ensureWorld().getBlockAt(1001,81,1001)),"prop area wand blocks non-admin interaction");
@@ -227,9 +229,82 @@ public class LibraryProbe extends JavaPlugin {
             later(() -> {
                 check(e.queuedBlocks()==0&&world.getBlockAt(0,80,0).getType()==Material.GOLD_BLOCK,"custom start blocks finish at configured entrance coordinates");
                 check(e.placeRoomImmediately("probe_base"),"normal expansion attaches to the custom STARTING room");
-                later(() -> {check(e.placedCount()==2&&e.queuedBlocks()==0,"custom library remains functional after all defaults are removed");getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();},30);
+                later(() -> {check(e.placedCount()==2&&e.queuedBlocks()==0,"custom library remains functional after all defaults are removed");diversityChecks(p);},30);
             },30);
         },5);
+    }
+    void diversityChecks(InfinityLibraryPlugin p) {
+        var rooms=p.getRoomManager();var engine=p.getGenerationEngine();var diversity=p.getDiversityManager();var deco=p.getPropManager();World world=engine.ensureWorld();
+        Fake fake=new Fake(p,true);Player author=fake.player;Room base=rooms.getActive("probe_base").orElseThrow();Vector3i origin=new Vector3i(3000,80,3000);
+        for(RoomBlock b:base.blocks()){Vector3i pos=origin.add(b.position());world.getBlockAt(pos.x(),pos.y(),pos.z()).setBlockData(Bukkit.createBlockData(b.blockData()),false);}
+        world.getBlockAt(3001,81,3001).setType(Material.OAK_PLANKS,false);world.getBlockAt(3003,82,3002).setType(Material.GLASS,false);
+        rooms.setPos1(author,origin.toLocation(world));rooms.setPos2(author,origin.add(base.size()).subtract(new Vector3i(1,1,1)).toLocation(world));
+        fake.items[0]=diversity.wand();diversity.mode(author,"reading","garden",1);
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3001,81,3001));
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3003,82,3002));
+        world.getBlockAt(3020,81,3000).setType(Material.GOLD_BLOCK,false);world.getBlockAt(3022,81,3001).setBlockData(Bukkit.createBlockData("minecraft:oak_stairs[facing=east]"),false);
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3020,81,3000));
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3022,82,3000));
+        boolean mismatch=false;try{diversity.staged(author);}catch(IllegalArgumentException expected){mismatch=true;}
+        check(mismatch,"Diversity mismatch cannot become a completed capture or be saved silently");
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3020,81,3000));
+        diversity.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3022,82,3001));
+        var staged=diversity.staged(author).getFirst();
+        check(staged.min().equals(new Vector3i(1,1,1))&&staged.size().equals(new Vector3i(3,2,2)),"four-click Diversity capture records room-local target bounds");
+        check(staged.variants().getFirst().blocks().size()==2,"variation source is captured outside the room using local source coordinates");
+        diversity.empty(author,"reading","empty",0);check(diversity.staged(author).getFirst().variants().size()==2,"one target accepts multiple alternatives including an empty design");
+        Room captured=rooms.capture(author,"probe_diversity",RoomType.FILLER,base.connections());diversity.clear(author);
+        check(captured.diversityAreas().size()==1,"room capture persists staged Diversity definitions");
+        diversity.originalWeight(captured.id(),"reading",0);rooms.setRoomChance(captured.id(),50);
+        check(rooms.getActive(captured.id()).orElseThrow().diversityAreas().size()==1,"room metadata edits preserve Diversity definitions");
+        boolean overlap=false;try{rooms.updatePropAreas(captured.id(),List.of(new PropArea("conflict",new Vector3i(1,1,1),new Vector3i(3,2,2),"library",0,false)));}catch(IllegalArgumentException expected){overlap=true;}
+        check(overlap,"saved decoration areas cannot overwrite a Diversity target");
+        Fake denied=new Fake(p,false);denied.items[0]=diversity.wand();check(diversity.handle(denied.player,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3001,81,3001)),"Diversity wand rejects non-admin use");
+        check(engine.placeRoomImmediately(captured.id()),"Diversity-bearing room attaches and queues construction");
+        var file=p.getDataFolder().toPath().resolve("generated.yml").toFile();var generated=YamlConfiguration.loadConfiguration(file);org.bukkit.configuration.ConfigurationSection placed=null;
+        for(String key:generated.getConfigurationSection("rooms").getKeys(false))if(captured.id().equals(generated.getString("rooms."+key+".room-id")))placed=generated.getConfigurationSection("rooms."+key);
+        if(placed==null)throw new IllegalStateException("Missing Diversity instance");var frozen=DiversityComposition.read(placed.getConfigurationSection("diversity"));
+        check(frozen.patches().getFirst().choice().equals("garden")&&frozen.patches().getFirst().blocks().size()==2,"chosen variation is frozen before room placement");
+        var roomFile=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var data=YamlConfiguration.loadConfiguration(roomFile);data.set("rooms."+captured.id()+".diversity.reading.variants.garden.blocks",List.of("0,0,0|minecraft:emerald_block"));
+        try{data.save(roomFile);}catch(java.io.IOException ex){throw new RuntimeException(ex);}
+        world.getBlockAt(3020,81,3000).setType(Material.AIR,false);world.getBlockAt(3022,81,3001).setType(Material.AIR,false);
+        p.reloadEverything();var restored=YamlConfiguration.loadConfiguration(file);boolean same=false;
+        for(String key:restored.getConfigurationSection("rooms").getKeys(false))if(captured.id().equals(restored.getString("rooms."+key+".room-id")))same=frozen.equals(DiversityComposition.read(restored.getConfigurationSection("rooms."+key+".diversity")));
+        check(same,"pending Diversity selection survives source removal, template edits and reload");
+        Vector3i at=Vector3i.read(placed.getConfigurationSection("origin"));var t=placed.getConfigurationSection("transform");RoomTransform transform=new RoomTransform(com.infinitylibrary.model.Rotation.valueOf(t.getString("rotation")),t.getBoolean("flip-x"),t.getBoolean("flip-z"));
+        later(() -> {
+            check(engine.queuedBlocks()==0,"queued Diversity clearing and placement finish");
+            Vector3i gold=at.add(transform.transform(new Vector3i(1,1,1),captured.size()));Vector3i cleared=at.add(transform.transform(new Vector3i(3,2,2),captured.size()));Vector3i stair=at.add(transform.transform(new Vector3i(3,1,2),captured.size()));
+            check(world.getBlockAt(gold.x(),gold.y(),gold.z()).getType()==Material.GOLD_BLOCK,"variant replaces the original furniture at its transformed target");
+            check(world.getBlockAt(cleared.x(),cleared.y(),cleared.z()).getType().isAir(),"air in the variation removes leftover default-design blocks");
+            var facing=world.getBlockAt(stair.x(),stair.y(),stair.z()).getBlockData();check(facing instanceof Directional d&&d.getFacing()==transform.transform(org.bukkit.block.BlockFace.EAST),"Diversity block facing follows room rotation and mirroring");
+            exactDecorationChecks(p,fake,base);
+        },35);
+    }
+    void exactDecorationChecks(InfinityLibraryPlugin p,Fake fake,Room base) {
+        var manager=p.getPropManager();Player author=fake.player;World world=p.getGenerationEngine().ensureWorld();
+        manager.put(new Prop("probe_exact","exact_test",new Vector3i(3,3,1),List.of(new RoomBlock(new Vector3i(0,0,0),"minecraft:diamond_block"),new RoomBlock(new Vector3i(2,2,0),"minecraft:gold_block")),1));
+        manager.put(new Prop("probe_too_small","exact_test",new Vector3i(1,1,1),List.of(new RoomBlock(new Vector3i(0,0,0),"minecraft:stone")),1000000));
+        manager.put(new Prop("probe_wrong_category","other_test",new Vector3i(3,3,1),List.of(new RoomBlock(new Vector3i(0,0,0),"minecraft:emerald_block")),1000000));
+        fake.items[0]=manager.wand();manager.mode(author,"library",0,"exact",false,false);
+        manager.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3007,81,3007));
+        manager.handle(author,org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK,world.getBlockAt(3009,83,3007));
+        check(fake.dialog!=null,"size is selected before the native decoration-category dialog");
+        boolean waiting=false;try{manager.staged(author);}catch(IllegalArgumentException expected){waiting=true;}check(waiting,"category selection must finish before saving a decoration area");
+        manager.category(author,"exact_test",false);PropArea area=manager.staged(author).getFirst();
+        check(area.size().equals(new Vector3i(3,3,1))&&area.category().equals("exact_test")&&area.fillMode()==PropArea.FillMode.EXACT,"post-selection category is stored with the exact area dimensions");
+        Room decorated=p.getRoomManager().capture(author,"probe_exact_room",RoomType.FILLER,base.connections());manager.clear(author);
+        var snapshot=manager.compose(decorated,new UUID(1,2));
+        check(snapshot.blocks().size()==2&&snapshot.blocks().stream().noneMatch(b -> b.blockData().contains("stone")||b.blockData().contains("emerald")),"exact decoration ignores smaller and wrong-category entries despite their high weights");
+        var missing=new PropArea("missing",new Vector3i(1,1,7),new Vector3i(2,2,1),"exact_test",0,false,false);
+        Room empty=new Room("missing",RoomType.FILLER,base.size(),base.connections(),base.blocks(),List.of(),100,List.of(missing));
+        check(manager.compose(empty,new UUID(1,2)).blocks().isEmpty(),"no exact-size match leaves the area empty instead of packing smaller decorations");
+        p.getRoomManager().setRoomType(decorated.id(),RoomType.STARTING);
+        check(p.getRoomManager().getActive(decorated.id()).orElseThrow().propAreas().getFirst().fillMode()==PropArea.FillMode.EXACT,"exact decoration settings survive room-role edits");
+        p.getRoomManager().appendVariations("probe_diversity",List.of(new VariationArea("legacy_cleanup","decor",100,List.of(new RoomBlock(new Vector3i(8,1,8),"minecraft:stone")))));
+        p.getRoomManager().removeVariation("probe_diversity","legacy_cleanup");
+        check(p.getRoomManager().getActive("probe_diversity").orElseThrow().diversityAreas().size()==1&&p.getRoomManager().getActive("probe_diversity").orElseThrow().variations().stream().noneMatch(v -> v.id().equals("legacy_cleanup")),"legacy-variation removal preserves Room Diversity metadata");
+        getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();
     }
     final class Fake implements InvocationHandler {
         final InfinityLibraryPlugin plugin; final UUID id=UUID.randomUUID(); final boolean admin;

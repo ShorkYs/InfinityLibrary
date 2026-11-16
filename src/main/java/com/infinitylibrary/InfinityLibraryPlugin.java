@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class InfinityLibraryPlugin extends JavaPlugin {
     private com.infinitylibrary.writing.BookWritingManager bookWritingManager;
     private com.infinitylibrary.props.PropManager propManager;
+    private com.infinitylibrary.diversity.DiversityManager diversityManager;
     private BookListener bookListener;
     private RoomManager roomManager;
     private GenerationEngine generationEngine;
@@ -28,6 +29,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         roomManager = new RoomManager(this); roomManager.load();
         bookStorageManager = new BookStorageManager(this); bookStorageManager.load();
         selectionManager = new SelectionManager(this);
+        diversityManager = new com.infinitylibrary.diversity.DiversityManager(this);
         bookWritingManager = new com.infinitylibrary.writing.BookWritingManager(this); bookWritingManager.load();
         guiManager = new GUIManager(this);
         generationEngine = new GenerationEngine(this, roomManager); generationEngine.start();
@@ -60,6 +62,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
 
     public com.infinitylibrary.writing.BookWritingManager getBookWritingManager() { return bookWritingManager; }
     public com.infinitylibrary.props.PropManager getPropManager() { return propManager; }
+    public com.infinitylibrary.diversity.DiversityManager getDiversityManager() {return diversityManager;}
     public RoomManager getRoomManager() { return roomManager; }
     public GenerationEngine getGenerationEngine() { return generationEngine; }
     public BookStorageManager getBookStorageManager() { return bookStorageManager; }

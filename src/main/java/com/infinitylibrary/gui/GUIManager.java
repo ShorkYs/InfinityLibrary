@@ -37,6 +37,7 @@ public class GUIManager {
         writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
         writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
         if(player.hasPermission("infinitylibrary.admin")) {
+            writer.icon(inv,42,Material.PRISMARINE_SHARD,"§6Room Diversity","§7Capture a target and its same-size alternatives");
             writer.icon(inv,44,Material.ARMOR_STAND,"§6Room props","§7Reusable props and placeholder area wand");
             writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
             writer.icon(inv,48,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"§aResume expansion":"§ePause expansion","§7Queued block placement continues");
@@ -53,6 +54,7 @@ public class GUIManager {
             case 32 -> openLecternBookEditor(player);
             case 34 -> openBookshelfReturn(player,null);
             case 40 -> { boolean given=plugin.getBookStorageManager().giveDailyWritableBook(player); player.sendMessage(given?"Book & quill added to your inventory.":"Unable to claim: check your daily limit and inventory space."); openMainMenu(player); }
+            case 42 -> {if(player.hasPermission("infinitylibrary.admin")){plugin.getBookStorageManager().returnItem(player,plugin.getDiversityManager().wand());player.sendMessage("Select the room, then /il diversitymode <area> <variant>. Click target corners, then source corners.");}}
             case 44 -> { if(player.hasPermission("infinitylibrary.admin")) plugin.getPropManager().browser(player); }
             case 46 -> { if(player.hasPermission("infinitylibrary.admin")) openRoomEditor(player); }
             case 48 -> { if(player.hasPermission("infinitylibrary.admin")) { var engine=plugin.getGenerationEngine(); engine.setPaused(!engine.isPaused()); openMainMenu(player); } }
@@ -167,7 +169,7 @@ public class GUIManager {
         for(var room:plugin.getRoomManager().allRooms()) {
             if(slot>=54)break;menu.entry(slot,room.id());
             inv.setItem(slot++,item(room.type()==com.infinitylibrary.model.RoomType.STARTING?Material.NETHER_STAR:Material.BOOK,"&b"+room.id(),List.of(
-                "&7Type: &f"+room.type(),"&7Connections: &f"+room.connections().size(),"&7Prop areas: &f"+room.propAreas().size(),
+                "&7Type: &f"+room.type(),"&7Connections: &f"+room.connections().size(),"&7Prop areas: &f"+room.propAreas().size(),"&7Diversity areas: &f"+room.diversityAreas().size(),
                 room.id().equals(plugin.getRoomManager().activeStartId())?"&aActive start for the next reset":"&7Click for room controls",
                 plugin.getRoomManager().isDefault(room.id())?"&7Default template":"&7Custom template","&cShift+right click to remove")));
         }
@@ -188,6 +190,7 @@ public class GUIManager {
         inv.setItem(20,item(Material.BRICKS,"&eUse As Expansion Base",List.of("&7Leaves the STARTING choice unchanged.","&7STARTING rooms cannot be a base.")));
         inv.setItem(22,item(Material.ARROW,"&eRoom List",List.of()));
         inv.setItem(24,item(Material.NAME_TAG,"&eChange Room Type",List.of("&e/il roomtype "+roomId+" <type>","&7STARTING, FILLER, BOOK or READ")));
+        inv.setItem(25,item(Material.PRISMARINE_SHARD,"&dRoom Diversity",List.of("&e/il diversityload "+roomId,"&e/il applydiversity "+roomId)));
         player.openInventory(inv);
     }
     public void roomMenuAction(Player p,LibraryMenu menu,int slot,boolean remove) {
@@ -209,6 +212,7 @@ public class GUIManager {
                 case 18 -> {manager.setRoomType(id,com.infinitylibrary.model.RoomType.STARTING);p.sendMessage("STARTING room selected for the next /il reset confirm. Existing rooms are unchanged.");openRoomDetails(p,id);}
                 case 20 -> {manager.chooseBase(id);p.sendMessage("Expansion base selected; the start room is unchanged.");openRoomDetails(p,id);}
                 case 22 -> openRoomEditor(p);
+                case 25 -> {plugin.getBookStorageManager().returnItem(p,plugin.getDiversityManager().wand());p.sendMessage("Select this authoring room, then /il diversityload "+id+" and /il diversityvariant <area> <variant>, or capture a new target/source pair.");}
                 case 24 -> p.sendMessage("/il roomtype "+id+" <STARTING|FILLER|BOOK|READ>");
             }
         } else if(menu.screen()==LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS) {

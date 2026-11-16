@@ -1,179 +1,139 @@
-# Room prop areas
+# Decoration areas — exact size and category
 
-Version 2.2 separates the **room shell** from its **decoration**. You can use a single
-standard room and fill selected interior areas differently each time it is generated.
-Props are reusable rectangular block templates; areas are placeholders that accept any
-matching prop, or a combination of smaller matching props.
+Starting in **2.4**, a decoration area chooses **one full-size decoration** from the
+matching category. Smaller templates are not combined or used as fallback. A `3×3×1`
+area with category `tables` only accepts a `3×3×1` table decoration, or a horizontally
+rotated template whose full transformed dimensions match when rotation is enabled.
 
-## Try it immediately
+Dimensions use **Minecraft X × Y × Z**: east/west × height × north/south. Matching is based
+on the selected capture box, including intentional air, rather than the number of solid
+blocks in it. Nothing automatically pads a smaller template to make it eligible.
 
-1. Stop the server, replace the old plugin JAR with version 2.2, and restart.
-2. Use `/il props` or **Room props** in the administrator main menu.
-3. Use `/il baseroom builtin_modular` to select the supplied standard room and discard
-   previous future-room reservations. Existing built rooms stay unchanged.
-4. Walk to unexpanded exits. New standard rooms use four prop areas, with random shelves,
-   benches, tables, plants and lecterns. Their central paths remain clear.
+## Capture decorations
 
-On a fresh 2.3 install a dedicated STARTING template uses the matching modular footprint.
-An existing world keeps its old entrance until you deliberately reset it. `/il baseroom <id>` selects only expansion; use `/il startroom <id>` for a STARTING template. See
-[ROOMS.md](ROOMS.md). Reset removes generated rooms, so back up your world first.
-
-## Dimensions: X × Y × Z
-
-Dimensions are Minecraft's block axes, including both selected corners:
-**X = east/west, Y = height, Z = north/south**.
-
-- A `2×5×1` area is two blocks wide, five blocks tall, one block deep. In **stack** mode
-  it can fit five `2×1×1` props, or one `2×3×1` plus one `2×2×1` prop.
-- A horizontal five-unit strip with a one-block height is `2×1×5`. In **floor** mode it
-  can fit five `2×1×1` props, or `2×1×3` plus `2×1×2` props.
-- Props can combine across all three axes when stacking is enabled. Horizontal rotation
-  swaps X/Z as needed; props are never tilted sideways or upside down.
-
-Whole prop bounding boxes reserve space, including air inside them. This lets you include
-intentional clearance in a captured prop and prevents another prop from intersecting it.
-
-## Capture your props first
-
-Build each prop outside the active generated library. Use the normal selection wand or
-`/il pos1` and `/il pos2` to select opposite corners of the **prop itself**, then run:
+Build a complete decoration layout outside the active library. Select its full bounding
+box with the normal room-selection tools (`/il pos1` and `/il pos2` or the selection wand),
+then capture it:
 
 ```text
-/il saveprop shelf_small library 3
+/il savedeco table_large tables 2
 ```
 
-This stores the prop under ID `shelf_small`, category `library`, relative weight `3`.
-Capture differently sized versions with different IDs in the same category. The filler
-can reuse one prop many times, so you do not need five copies of a one-unit template.
-Capture props before generating rooms that depend on them: a room generated while its
-category has no matching props will stay empty, because its layout is saved.
+`/il saveprop` remains an alias for the same operation. The ID is `table_large`, the category
+is `tables`, and relative selection weight is `2`. Capture other designs with **the same
+box dimensions and category** to create that size/category's eligible list.
 
-`/il listprops [category]` lists the catalog; `/il propinfo <id>` shows details.
-`/il propweight <id> 0` disables future selection. Positive weights influence relative
-selection, rather than being percentages. Catalog edits affect future decoration only.
-You can recapture a custom ID to replace it or use `/il deleteprop <id>`. Built-in IDs
-cannot be deleted/overwritten by capture; disable them with weight zero instead.
+Use `/il listdecos [category]` (also `/il listprops`) and `/il propinfo <id>` to inspect the
+catalog. `/il propweight <id> 0` disables an entry for future rooms. `/il deleteprop <id>`
+removes a custom template; disable built-ins with weight zero instead. Source builds can
+be removed after capture, and edits/deletion do not reroll existing room snapshots.
 
-Props save **block states**, including facing, stairs and slabs. They do not capture
-entities or full block-entity contents/NBT: chest items, custom sign text and armor stands
-are not included. Generated chiseled bookshelves use the plugin's existing book population
-logic; generated lecterns open the library menu. Bench props are decorative blocks, not
-an automatic seat registration system.
+## Select the area, then choose its category
 
-## Mark areas in your standard room
-
-1. Build one room with empty interiors and usable doorways.
-2. Clear previous staged connections/areas with `/il clearconnections` and
-   `/il clearpropareas`, then select the **whole room**, including floor, walls and ceiling.
-3. Stage each exit with the connection wand as usual.
-4. Get `/il propwand` and choose the area's settings:
-
-```text
-/il propmode library 15 furniture rotate floor
-```
-
-5. Holding the amethyst-shard prop wand, click two opposite **interior** corners per area.
-   Use temporary blocks to mark corners if you need to select air. Each two-click selection
-   stages one area, named `furniture_1`, `furniture_2`, and so on.
-6. Repeat with different sizes or settings, then save the room:
+1. Select the **whole authoring room**, including its shell, and stage its exits as usual.
+2. Get `/il decowand` (`/il propwand` also works).
+3. Click two opposite interior corners of the decoration placeholder.
+4. A native text dialog shows the exact X,Y,Z size and categories that currently have a
+   matching full-size decoration. Enter the category and choose whether horizontal
+   rotations are allowed, then click **Use category**.
+5. Save the room or apply the staged area:
 
 ```text
 /il saveroom standard FILLER
-/il baseroom standard
 ```
 
-The selection is room-local, so the same areas rotate/mirror with each room instance.
-Placeholder markers and other blocks within these areas are omitted from capture and
-cleared during generation, then replaced by the chosen props. The physical authoring
-room is not automatically cleared.
-
-**Settings:**
-
-```text
-/il propmode <category|*> [gapPercent] [prefix] [rotate|fixed] [floor|stack]
-```
-
-- **category:** only props in that category; `*` allows all enabled categories.
-- **gapPercent:** `0` requests dense filling where possible; `100` leaves the area empty.
-  Intermediate values introduce random gaps. It is an approximate packing preference,
-  not an exact percentage of the volume.
-- **prefix:** the name prefix for staged areas.
-- **rotate:** allow 90-degree horizontal rotations that fit the bounds.
-- **fixed:** preserve captured facing relative to the room; useful for wall shelves.
-- **floor:** all props anchor at the area's lowest Y. Tall props must still fit its height.
-  This is the command default and the standard room's mode, preventing furniture piles.
-- **stack:** permits multiple vertical layers, using occupied prop bounding boxes as support.
-  Packing support is a box rule, not a simulation of block solidity or gravity.
-
-For your vertical `2×5×1` example, use `fixed stack`. For a horizontal `2×1×5` strip,
-use `fixed floor`. Capture the `2×1`, `2×2` and `2×3` pieces along the same intended axis.
-
-## Add areas to an existing saved template
-
-Select the physical authoring room again with the **same dimensions** as its saved
-version. Mark the areas with the prop wand and run:
+or, for an existing template with the same selected room dimensions:
 
 ```text
 /il applypropareas standard
+```
+
+If you close the category dialog, you can still finish that pending area in chat:
+
+```text
+/il decocategory tables
+```
+
+Saving/applying is blocked until category selection is complete, so it cannot silently
+omit the placeholder you just selected. A missing category/size match is allowed for
+future authoring, with a warning; that area stays empty until a matching entry exists.
+It never falls back to another category or smaller template. `*` explicitly permits any
+category, while still requiring the full size to match.
+
+Categories use lowercase letters, digits, underscores and hyphens. Temporary corner
+markers inside the placeholder are omitted from room capture and cleared in generated
+rooms. The physical authoring build is not automatically cleared.
+
+## Settings and existing templates
+
+`/il propmode` supplies defaults for the next selection/dialog:
+
+```text
+/il propmode tables 0 furniture fixed floor exact
+```
+
+The parameters are `<category> [emptyPercent] [prefix] [rotate|fixed] [floor|stack]
+[exact|packed]`. In EXACT mode, emptyPercent is the chance to leave the **entire area**
+empty: `0` chooses a matching decoration whenever one is available; `100` leaves it blank.
+The floor/stack setting has no effect on a single exact-size decoration.
+
+Inspect or edit an existing saved area without recapturing it:
+
+```text
 /il listpropareas standard
+/il setdecocategory standard furniture_1 tables
+/il decofill standard furniture_1 exact
+/il removeproparea standard furniture_1
 ```
 
-The areas are added to the saved template for **future instances**; existing room
-snapshots stay unchanged. Wait until construction finishes before editing saved areas.
-Overlapping IDs/areas are rejected. Choose a different prefix if you need more IDs.
+These edits affect future instances. They require queued construction to finish first.
+`/il clearpropareas` discards temporary staging and the pending category selection.
 
-Use `/il removeproparea <roomId> <areaId>` to remove one area from future instances.
-Removing an area leaves that part of the template empty; it does not restore omitted
-placeholder blocks. `/il clearpropareas` discards staging and the unfinished two-click
-selection, without deleting saved room areas. Changing the whole-room selection or
-logging out discards stale staging so it cannot be applied to a different room by accident.
+Rotation never changes height. With rotation off, all three captured dimensions must
+match directly. With rotation on, a `1×3×3` decoration may turn into `3×3×1`, but a `3×1×3`
+decoration is rejected because its height is different.
 
-## Protection, randomness and persistence
+## Standard room and compatibility
 
-Areas must stay inside the floor/walls/ceiling. They cannot overlap each other, a doorway,
-or its first two inward blocks of entrance clearance. This protects exits; it does not
-prove a full walkable route through an arbitrary custom room. Keep your intended
-hallways outside prop areas. The supplied standard room has a clear central cross.
+The standard `builtin_modular` room has four `3×3×3` placeholders. New full-size shelf,
+reading and garden corner arrangements match those slots. The older small props remain
+in the catalog for explicitly sized slots or packed mode. Use `/il props` or the main
+menu's **Room props** control for the browser/wand; `/il baseroom <id>` chooses expansion.
+See [ROOMS.md](ROOMS.md) for STARTING templates and default-room removal.
 
-The packer uses seeded, randomized fitting with several bounded attempts. It can combine
-props, reuse templates, rotate them, and leave intentional gaps. It favors useful coverage
-without overlaps; it is not an exhaustive exact-cover solver. Awkward dimensions, missing
-props or an exhausted work budget can leave space empty even with gap setting zero.
+Areas without a stored fill mode now default to EXACT for **new instances**. Existing
+completed or pending per-room decoration snapshots retain their saved block layouts.
+After upgrading, custom old areas may stay empty until you capture their exact-size
+variants and category, or explicitly switch that area to packed mode.
 
-Each room's resolved prop blocks and area bounds are saved in `generated.yml` **before
-placement**. Changing/deleting templates, changing weights or reloading will not reroll
-those blocks. Pending construction replays its saved decoration, including block facing.
-The base/variation recovery behavior outside prop areas otherwise remains as in 2.1.
+## Optional legacy packing
 
-Data files:
+If you deliberately want the previous behavior of combining several smaller pieces:
 
-- `props.yml`: reusable templates, categories and weights.
-- `rooms.yml`: prop areas on room templates.
-- `generated.yml`: resolved per-instance decoration and future-room reservations.
-
-`/il backup` includes these YAML files, but not world region files. Restore a matching
-plugin-data/world backup together while the server is stopped.
-
-## Limits and performance
-
-A prop or area supports up to **8,192 bounding-box cells**. A room supports at most
-**32 areas** and **32,768 combined area cells**. The catalog supports up to **256 props**,
-including built-ins. These limits bound capture, snapshots and placement queues.
-
-```yaml
-props:
-  packing-attempts: 8
-  cell-check-budget: 200000
+```text
+/il decofill standard furniture_1 packed
 ```
 
-Attempts are capped at 32; collision/support cell checks per area are capped at 1,000,000
-and shared across attempts. The usual `generation.placement-blocks-per-tick` budget also
-applies to clearing placeholders and placing props. More areas and larger snapshots use
-more disk space and server work; test with your intended room sizes and player load.
+PACKED mode uses the bounded, category-filtered randomized packer. It can combine `3+2`
+pieces across a five-unit strip, reuse templates, leave gaps, and optionally stack. Floor
+mode anchors all pieces at the area's lowest Y; stack mode uses occupied bounding boxes
+as support, not actual block solidity/gravity. `props.packing-attempts` and
+`props.cell-check-budget` apply only to PACKED mode. Exact selection ignores these budgets.
 
-## Keep mixed room designs if desired
+## Safety, limits and data
 
-`/il baseroom all` restores selection across the eligible room catalog. Areas work in
-those templates too. The new modular default applies to new expansion; upgrading does
-not redecorate or remove completed rooms. Old saved reservations for a different base
-are discarded when single-base mode is loaded.
+Decoration areas must remain inside floor/walls/ceiling and cannot overlap each other,
+Diversity targets, doorways or entrance clearance. Preserve intended paths outside the
+areas. Props capture block states, not full NBT/entities: chest contents, sign text and
+armor stands are not copied. Generated chiseled bookshelves use the book collection;
+lecterns open the library menu. Bench blocks do not automatically register seats.
+
+A decoration or area is limited to 8,192 bounding cells; rooms support 32 decoration areas
+and 32,768 combined cells. The catalog limit is 256 entries including built-ins. Packed
+attempts are capped at 32 and collision checks at 1,000,000 per area. Clearing and placement
+use the normal per-tick block budget.
+
+`props.yml` stores templates/categories/weights, `rooms.yml` stores areas and fill mode,
+and `generated.yml` stores resolved per-instance decoration. Plugin ZIP backups contain
+YAML only; restore matching world/plugin backups while stopped. New layout choices are
+saved before placement and survive reloads without rerolling.

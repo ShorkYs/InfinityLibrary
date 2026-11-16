@@ -98,7 +98,7 @@ public class RoomManager {
     public void setRoomType(String id,RoomType type) {
         Room old=getActive(id).orElseThrow(() -> new IllegalArgumentException("Active room not found: "+id));
         if(old.type()==RoomType.STARTING&&type!=RoomType.STARTING&&id.equals(activeStartId()))throw new IllegalArgumentException("Select another active STARTING room before changing this room's type.");
-        Room next=new Room(old.id(),type,old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas());
+        Room next=new Room(old.id(),type,old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),old.diversityAreas());
         rooms.put(id,next);try{save();}catch(RuntimeException e){rooms.put(id,old);throw e;}
         if(type==RoomType.STARTING)chooseStart(id);else plugin.getGenerationEngine().replanFutureRooms();
     }
@@ -155,7 +155,7 @@ public class RoomManager {
                 blocks.add(new RoomBlock(new Vector3i(x - minX, y - minY, z - minZ), block.getBlockData().getAsString()));
             }
         }
-        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas);
+        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas,plugin.getDiversityManager().staged(player));
         Room previous=rooms.put(id,room);
         try{save();}catch(RuntimeException e){if(previous==null)rooms.remove(id);else rooms.put(id,previous);throw e;}
         if(type==RoomType.STARTING)chooseStart(id);
@@ -184,7 +184,7 @@ public class RoomManager {
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
         List<VariationArea> merged = new ArrayList<>(existing.variations());
         merged.addAll(additions);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance(),existing.propAreas());
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance(),existing.propAreas(),existing.diversityAreas());
         rooms.put(roomId, updated);
         save();
     }
@@ -193,7 +193,7 @@ public class RoomManager {
         if (!Double.isFinite(chance) || chance < 0 || chance > 100) throw new IllegalArgumentException("Chance must be finite and between 0 and 100.");
         Room existing = rooms.get(roomId);
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance,existing.propAreas());
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance,existing.propAreas(),existing.diversityAreas());
         rooms.put(roomId, updated);
         save();
     }
@@ -202,10 +202,26 @@ public class RoomManager {
         Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found: "+roomId));
         if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing prop areas.");
         Room next=new Room(old.id(),old.type(),old.size(),old.connections(),
-            old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas);
+            old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas,old.diversityAreas());
         rooms.put(roomId,next);
         try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}
         plugin.getGenerationEngine().replanFutureRooms();
+    }
+
+    public void removeVariation(String roomId,String variationId) {
+        Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));
+        if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing variations.");
+        List<VariationArea> remaining=old.variations().stream().filter(v -> !v.id().equals(variationId)).toList();
+        if(remaining.size()==old.variations().size())throw new IllegalArgumentException("Legacy variation not found");
+        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),remaining,old.spawnChance(),old.propAreas(),old.diversityAreas());
+        rooms.put(roomId,next);try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}plugin.getGenerationEngine().replanFutureRooms();
+    }
+
+    public void updateDiversity(String roomId,List<com.infinitylibrary.diversity.DiversityArea> areas) {
+        Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));
+        if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing Diversity.");
+        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),areas);
+        rooms.put(roomId,next);try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}plugin.getGenerationEngine().replanFutureRooms();
     }
 
     private void addBuiltinRooms() {

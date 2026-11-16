@@ -1,14 +1,34 @@
-# Infinity Library 2.3
+# Infinity Library 2.4
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.3.0.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.3.0-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.4.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.4.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Room Diversity and exact decorations (new in 2.4)
+
+**Room Diversity** lets you capture alternatives for part of a room. Select the whole
+room, get `/il diversitywand`, then click two target corners and two equally sized source
+corners elsewhere in the same world. Save the room or use `/il applydiversity <roomId>`.
+A room can choose its original table layout or a completely different captured design;
+several weighted alternatives are supported, and choices persist per generated instance.
+
+**[Room Diversity guide](DIVERSITY.md)** covers the capture phases, original/alternative
+weights, empty alternatives, editing and frozen snapshots.
+
+Decoration areas now select **one exact-size, category-matching decoration**. After two
+corner clicks with `/il decowand`, a dialog asks for the category. A `3×3×1` area does not
+accept smaller decorations or another category. `/il savedeco` captures the catalog entries.
+The older smaller-piece packer remains available only when explicitly selected.
+
+**[Updated decoration guide](PROPS.md)** explains category selection, dimension matching,
+rotation, empty-area probability, migration and optional PACKED mode. These changes affect
+newly generated rooms; existing instances retain their saved layouts.
 
 ## Custom entrances and removable defaults (new in 2.3)
 
@@ -37,8 +57,8 @@ built rooms stay as they are.
 Use `/il props` (or the administrator **Room props** menu button) to inspect the catalog
 and get the prop-area wand. Build your own props, capture them with
 `/il saveprop <id> <category> [weight]`, and mark differently sized areas in your room.
-The filler combines multiple smaller props, optionally rotates them, and can leave gaps.
-For example, a five-unit strip can use five one-unit props or a three-unit and two-unit prop.
+The default selector chooses one full-size matching decoration per area. Explicit PACKED
+mode retains the optional smaller-piece combinations from 2.2.
 
 **[Prop-area setup guide and commands](PROPS.md)** explains dimensions, floor versus
 stacked filling, categories, relative weights, placeholder clearing and the authoring
@@ -205,17 +225,18 @@ It removes player changes in those volumes. There is no general world undo.
 
 Template capture stores block data rather than full block-entity NBT, inventories or
 entities. Vertical connectors are geometric openings, not automatic elevators. Reading
-seat/table wand marks remain session-only. Unfinished room recovery can reroll variations;
+seat/table wand marks remain session-only. Unfinished room recovery can reroll legacy variations outside frozen Diversity patches;
 wait for construction before modifying those rooms. Private-book rules apply within the
 plugin; they are not DRM against server administrators or other plugins.
 
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.3.0.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.4.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
-`./gradlew test` covers transforms, multi-door planning and manuscript editing/validation.
+`./gradlew test` covers transforms, planning, manuscripts, room catalogs, exact decoration
+matching and Room Diversity selection/persistence.
 See [VERIFICATION.md](VERIFICATION.md) for actual live-server checks and their limits.
 The verification-only companion plugin must never be installed on a valuable server:
 it resets the library and shuts down its disposable test server.

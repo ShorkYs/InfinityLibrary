@@ -1,54 +1,60 @@
-# Version 2.3.0 verification — 2026-11-16
+# Version 2.4.0 verification — 2026-11-16
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
-## Compilation and automated tests
+## Clean build and automated tests
 
-Build and JAR packaging passed. **38 JUnit tests** passed with zero failures:
+`clean build` passed with **54 JUnit tests**, zero failures:
 
-- The 30 existing tests for transforms, sibling layout planning, book drafts, prop packing,
-  area safety and frozen prop persistence.
-- 8 room-catalog/type tests: persisted default removal, archived geometry retained across
-  packaged-default changes, restoration, removed custom templates, batch-removal preflight,
-  legacy room-file compatibility, active/archive conflict handling, and STARTING parsing
-  and serialization.
+- 38 retained geometry, room-planning/catalog, manuscript and prop-packing/persistence tests.
+- 7 exact-decoration tests: reject smaller entries, require category and all dimensions,
+  reject equal volume with different height, allow only explicitly enabled matching rotations,
+  disabled entries/whole-area emptiness, exact-mode migration, wildcard and seeded choices.
+- 9 Room Diversity tests: exact source dimensions, local-coordinate replacement, original
+  choices, disabled-choice fallback, varied seeds, empty alternatives, room/snapshot round
+  trips, overlap/door protection, malformed data and legacy reads.
 
-## Disposable Paper server
+Fixed Gradle resource-input tracking for the plugin version. The clean release JAR's
+`plugin.yml` was inspected and reports **2.4.0**, matching the actual release filename.
 
-The final run passed **81 integration assertions** on the actual Paper server/API. Coverage
-includes all prior construction/planning, book-writing, prop-capture/packing/snapshot,
-GUI-protection and storage-failure checks, plus the following room-management workflow:
+## Actual Paper server checks
 
-- Default removals remain suppressed after a real process restart.
-- Capturing via `/il saveroom ... STARTING` selects the entrance without expanding it or
-  resetting the existing library.
-- Normal base selection preserves the independent start choice.
-- STARTING cannot be a normal base or manual expansion candidate; mixed selection excludes it.
-- Active start/base templates are protected, and bulk removal checks all targets before changes.
-- Room GUI confirmation/cancel, hidden removed defaults, and deferred STARTING button action.
-- Default/custom template removal retains references required by built rooms and `/il home`.
-- Removal, restoration, role and selected-start persistence through reload.
-- Invalid reset selection is rejected before generated room volumes are cleared.
-- Reset uses the selected custom entrance, places its distinctive floor block at the
-  configured location, and normal expansion subsequently attaches successfully with all
-  default templates removed.
+The final correctly labeled 2.4.0 JAR passed **104 integration assertions**, including:
 
-The actual final run has 81 assertions; counts vary by one on a fresh test data folder
-because the process-restart assertion requires a previous saved removal state.
+- Four-click Diversity capture with an external source, rejected dimension mismatch,
+  prevention of silently saving an incomplete capture, multiple/empty alternatives,
+  captured room-local bounds, saved definitions and metadata preservation.
+- Diversity/decor-area overlap and administrator guards.
+- A generated alternative frozen before placement, surviving removed source builds,
+  edited template data and reload; clearing leftover default blocks; correct transformed
+  world positions and facing.
+- A native decoration-category dialog after selection, required completion before save,
+  and the selected category stored with exact area dimensions.
+- Smaller/wrong-category entries excluded despite much higher weights; missing exact
+  matches leave the area empty; room-role edits retain exact-selection settings.
+- Legacy variation removal preserves Diversity data.
+- Prior book-writing/menu safety, durable publication/payment rollback, prop snapshots,
+  room planning/recovery, STARTING controls, persistent default removal/archive/restore,
+  home/reset and post-removal expansion checks.
 
-## Test harness and limits
+Process-state-dependent startup assertions can change the count on a fresh test folder.
+The recorded final run used saved data from the previous disposable test run.
 
-`verification/LibraryProbe.java` is a **destructive disposable-server test harness**. It
-resets the library, writes fixtures, changes configuration and shuts down the server.
-Never install it on a valuable server. Player/inventory protocol uses Java proxies while
-world blocks, item metadata, inventories, dialogs, file persistence and scheduler are real.
+## Harness and practical limits
 
-No Minecraft client was connected. Client rendering/dialog response routing, full
-multiplayer inventory synchronization, third-party plugin compatibility and large-server
-load capacity remain manual checks. Test with your own rooms/props and a 26.3 client.
+`verification/LibraryProbe.java` is destructive test-only code: it resets the library,
+writes fixtures/configuration and shuts down the disposable server. Never install it
+on a valuable server. Its player/inventory protocol is simulated with Java proxies; the
+Paper world, block data, metadata, inventories, dialogs, scheduler and persistence are real.
 
-The room/prop planners are bounded heuristics; exact/global optimal layouts are not
-promised. Prop support uses bounding boxes and capture excludes full NBT/entities.
-Room-removal archives need the 2.3 data format; restore matching backups before downgrading.
-Authentication/discovery services were unavailable, so the local test server used offline
-mode on loopback. Production server settings are not included in the release.
+No Minecraft client was connected. Native dialogs were constructed and their backing
+operations exercised through server methods/commands; real client rendering, input callback
+routing, multiplayer synchronization and visual quality still require in-game checks.
+Third-party compatibility and large-server load capacity are not certified.
+
+Room/packed-prop planning remains bounded. Exact decoration chooses only full transformed
+size/category matches. Capture excludes entities/full block-entity NBT, and custom Diversity
+floor/wall edits do not constitute a global pathfinding guarantee. Earlier plugin versions
+cannot safely preserve every new Diversity/snapshot field; use matching backups to downgrade.
+Authentication/discovery services were unavailable, so the local server used offline mode
+on loopback. No production server configuration or runtime data is included.

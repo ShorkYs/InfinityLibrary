@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.4.0
+
+- Added Room Diversity: paired target/source corner selections with exact X/Y/Z checks,
+  multiple weighted alternatives, original-design weighting, empty alternatives, staging,
+  saved-room editing and per-instance frozen replacement patches.
+- Alternative air clears the original target, and generated block states follow room
+  transforms. Captured source builds are not live dependencies.
+- Added Diversity wand/menu controls and commands; legacy-variation removal helps migration.
+- Made EXACT the decoration default: one full-size template matching dimensions/category,
+  with optional matching rotation and whole-area emptiness. Smaller entries are not fallback.
+- Added the native category dialog after area selection, chat fallback and saved-area
+  category/fill-mode editing. PACKED remains an explicit legacy option.
+- Added complete 3x3x3 starter arrangements for the standard room slots and retained old
+  generated decoration snapshots.
+- Tracked plugin-version changes as resource inputs to prevent a cached old descriptor.
+- Preserved Diversity fields through role/area/chance/archive operations and persisted
+  recovery snapshots before queued placement resumes.
+
 ## 2.3.0
 
 - Added STARTING room type, automatic entrance selection on save/conversion, and explicit

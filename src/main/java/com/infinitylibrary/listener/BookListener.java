@@ -34,6 +34,7 @@ public class BookListener implements Listener {
 
     @EventHandler(ignoreCancelled = true) public void onInteract(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) return;
+        if (plugin.getDiversityManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
         if (plugin.getPropManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
         if (plugin.getSelectionManager().handle(e.getPlayer(), e.getAction(), e.getClickedBlock())) { e.setCancelled(true); return; }
         if (!e.getPlayer().getWorld().getName().equals(plugin.getConfig().getString("world", "InfinityLibrary"))) return;
@@ -148,6 +149,7 @@ public class BookListener implements Listener {
 
     @EventHandler public void onSneak(PlayerToggleSneakEvent e) { if (e.isSneaking()) clearReadingIndicator(e.getPlayer()); }
     public void cleanup(Player player) {
+        plugin.getDiversityManager().clear(player);
         plugin.getPropManager().endSession(player);
         plugin.getBookWritingManager().invalidate(player);
         clearReadingIndicator(player);

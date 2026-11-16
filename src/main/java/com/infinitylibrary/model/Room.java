@@ -2,6 +2,7 @@ package com.infinitylibrary.model;
 
 import org.bukkit.Material;
 import com.infinitylibrary.props.PropArea;
+import com.infinitylibrary.diversity.DiversityArea;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.ConfigurationSection;
 
@@ -16,11 +17,16 @@ public class Room {
     private final List<VariationArea> variations;
     private final double spawnChance;
     private final List<PropArea> propAreas;
+    private final List<DiversityArea> diversityAreas;
 
     public Room(String id, RoomType type, Vector3i size, List<ConnectionPoint> connections, List<RoomBlock> blocks, List<VariationArea> variations, double spawnChance) {
         this(id,type,size,connections,blocks,variations,spawnChance,List.of());
     }
     public Room(String id, RoomType type, Vector3i size, List<ConnectionPoint> connections, List<RoomBlock> blocks, List<VariationArea> variations, double spawnChance,List<PropArea> propAreas) {
+        this(id,type,size,connections,blocks,variations,spawnChance,propAreas,List.of());
+    }
+    public Room(String id,RoomType type,Vector3i size,List<ConnectionPoint> connections,List<RoomBlock> blocks,List<VariationArea> variations,double spawnChance,List<PropArea> propAreas,List<DiversityArea> diversityAreas) {
+        this.diversityAreas=List.copyOf(diversityAreas);
         this.propAreas=List.copyOf(propAreas);
         this.id = Objects.requireNonNull(id);
         this.type = Objects.requireNonNull(type);
@@ -37,6 +43,7 @@ public class Room {
     public List<ConnectionPoint> connections() { return connections; }
     public List<RoomBlock> blocks() { return blocks; }
     public List<VariationArea> variations() { return variations; }
+    public List<DiversityArea> diversityAreas() {return diversityAreas;}
     public List<PropArea> propAreas() { return propAreas; }
     public double spawnChance() { return spawnChance; }
 
@@ -60,8 +67,9 @@ public class Room {
             }
         }
         validatePropAreas(size,connections,propAreas);
-        if (type == RoomType.BOOK && !hasBookshelf && propAreas.isEmpty()) throw new IllegalArgumentException("BOOK room " + id + " must contain a chiseled bookshelf");
-        if (type == RoomType.READ && !hasSeat && propAreas.isEmpty()) throw new IllegalArgumentException("READ room " + id + " must contain a stair or slab");
+        validateDiversityAreas(size,connections,propAreas,variations,diversityAreas);
+        if (type == RoomType.BOOK && !hasBookshelf && propAreas.isEmpty() && diversityAreas.isEmpty()) throw new IllegalArgumentException("BOOK room " + id + " must contain a chiseled bookshelf");
+        if (type == RoomType.READ && !hasSeat && propAreas.isEmpty() && diversityAreas.isEmpty()) throw new IllegalArgumentException("READ room " + id + " must contain a stair or slab");
     }
 
     public static void validatePropAreas(Vector3i roomSize,List<ConnectionPoint> connections,List<PropArea> areas) {
@@ -73,7 +81,13 @@ public class Room {
             if(m.x()<1||m.y()<1||m.z()<1||(long)m.x()+s.x()>=roomSize.x()||(long)m.y()+s.y()>=roomSize.y()||(long)m.z()+s.z()>=roomSize.z())
                 throw new IllegalArgumentException("Prop area "+a.id()+" must stay inside the room's floor, walls and ceiling.");
             for(int j=0;j<i;j++)if(a.overlaps(areas.get(j)))throw new IllegalArgumentException("Prop areas overlap: "+a.id()+" and "+areas.get(j).id());
-            for(ConnectionPoint cp:connections) {
+            for(ConnectionPoint cp:connections)if(intersectsDoor(a,cp))throw new IllegalArgumentException("Prop area "+a.id()+" obstructs doorway "+cp.id()+" or its entrance clearance.");
+        }
+        if(volume>32768)throw new IllegalArgumentException("Combined prop areas exceed 32,768 blocks.");
+    }
+
+    private static boolean intersectsDoor(PropArea area,ConnectionPoint cp) {
+        Vector3i m=area.min(),s=area.size();
                 Vector3i v=cp.position();int half=cp.width()/2;
                 Vector3i min,max;
                 switch(cp.direction()) {
@@ -81,11 +95,22 @@ public class Room {
                     case EAST,WEST -> {int end=v.x()-cp.direction().getModX()*2;min=new Vector3i(Math.min(v.x(),end),v.y(),v.z()-half);max=new Vector3i(Math.max(v.x(),end)+1,v.y()+cp.height(),v.z()-half+cp.width());}
                     default -> {int end=v.y()-cp.direction().getModY()*2;min=new Vector3i(v.x()-half,Math.min(v.y(),end),v.z()-half);max=new Vector3i(v.x()-half+cp.width(),Math.max(v.y(),end)+1,v.z()-half+cp.width());}
                 }
-                if(m.x()<max.x()&&(long)m.x()+s.x()>min.x()&&m.y()<max.y()&&(long)m.y()+s.y()>min.y()&&m.z()<max.z()&&(long)m.z()+s.z()>min.z())
-                    throw new IllegalArgumentException("Prop area "+a.id()+" obstructs doorway "+cp.id()+" or its entrance clearance.");
-            }
+        return m.x()<max.x()&&(long)m.x()+s.x()>min.x()&&m.y()<max.y()&&(long)m.y()+s.y()>min.y()&&m.z()<max.z()&&(long)m.z()+s.z()>min.z();
+    }
+    public static void validateDiversityAreas(Vector3i roomSize,List<ConnectionPoint> connections,List<PropArea> props,List<VariationArea> legacy,List<DiversityArea> areas) {
+        if(areas.size()>16)throw new IllegalArgumentException("At most 16 Diversity areas per room.");
+        Set<String> ids=new HashSet<>();long volume=0,alternatives=0;
+        for(int i=0;i<areas.size();i++) {
+            DiversityArea area=areas.get(i);PropArea bounds=area.bounds();Vector3i m=area.min(),s=area.size();
+            if(!ids.add(area.id()))throw new IllegalArgumentException("Duplicate Diversity area: "+area.id());
+            if(m.x()<0||m.y()<0||m.z()<0||(long)m.x()+s.x()>roomSize.x()||(long)m.y()+s.y()>roomSize.y()||(long)m.z()+s.z()>roomSize.z())throw new IllegalArgumentException("Diversity target must be within the selected room.");
+            for(ConnectionPoint cp:connections)if(intersectsDoor(bounds,cp))throw new IllegalArgumentException("Diversity area obstructs doorway: "+cp.id());
+            for(PropArea prop:props)if(bounds.overlaps(prop))throw new IllegalArgumentException("Diversity and decoration areas cannot overlap: "+area.id()+" / "+prop.id());
+            for(int j=0;j<i;j++)if(bounds.overlaps(areas.get(j).bounds()))throw new IllegalArgumentException("Diversity areas overlap.");
+            for(VariationArea v:legacy)if(v.blocks().stream().anyMatch(b -> bounds.contains(b.position())))throw new IllegalArgumentException("Diversity overlaps a legacy variation; remove that variation or use a different target.");
+            volume+=PropArea.volume(s);alternatives+=PropArea.volume(s)*area.variants().size();
         }
-        if(volume>32768)throw new IllegalArgumentException("Combined prop areas exceed 32,768 blocks.");
+        if(volume>16384||alternatives>131072)throw new IllegalArgumentException("Diversity limits: 16,384 target cells and 131,072 captured source cells per room.");
     }
 
     private Material materialFromBlockData(String data) {
@@ -107,6 +132,7 @@ public class Room {
         s.set("spawn-chance", spawnChance);
         ConfigurationSection props=s.createSection("prop-areas");
         for(PropArea a:propAreas)a.write(props.createSection(a.id()));
+        ConfigurationSection diversity=s.createSection("diversity");for(DiversityArea a:diversityAreas)a.write(diversity.createSection(a.id()));
         ConfigurationSection vSec = s.createSection("variations");
         for (VariationArea variation : variations) variation.write(vSec.createSection(variation.id()));
     }
@@ -127,6 +153,7 @@ public class Room {
         if (vSec != null) for (String key : vSec.getKeys(false)) variations.add(VariationArea.read(key, vSec.getConfigurationSection(key)));
         List<PropArea> areas=new ArrayList<>();ConfigurationSection a=s.getConfigurationSection("prop-areas");
         if(a!=null)for(String key:a.getKeys(false))areas.add(PropArea.read(key,a.getConfigurationSection(key)));
-        return new Room(id, type, size, cps, blocks, variations, s.getDouble("spawn-chance", 100.0),areas);
+        List<DiversityArea> diversity=new ArrayList<>();var d=s.getConfigurationSection("diversity");if(d!=null)for(String key:d.getKeys(false))diversity.add(DiversityArea.read(key,d.getConfigurationSection(key)));
+        return new Room(id, type, size, cps, blocks, variations, s.getDouble("spawn-chance", 100.0),areas,diversity);
     }
 }
