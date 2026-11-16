@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.0
+
+- Added one standard modular room with four independently filled prop areas, alongside
+  five starter prop templates. Single-base-room mode is the new expansion default;
+  mixed template selection remains available with `/il baseroom all`.
+- Added prop capture, category filtering, relative weights, optional rotations, configurable
+  gaps, floor-only furniture placement and optional 3D stacking.
+- Added bounded randomized packing that combines differently sized props without overlaps.
+- Added a prop-area wand, a prop browser and room-area editing/inspection commands.
+- Saved per-instance decoration snapshots and queued area clearing/prop placement;
+  prop edits/deletion affect future instances rather than rerolling existing decoration.
+- Validated shell/doorway clearances, area overlaps, capture sizes and catalog limits.
+- Kept legacy room data and earlier downloadable versions.
+
 ## 2.1.0
 
 - Added a 54-slot main menu to `/il`, `/il menu`, `/il gui` and library lecterns.

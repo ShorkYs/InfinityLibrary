@@ -18,7 +18,9 @@ generation:
     candidates-per-door: 12
     max-doors: 16
     world-block-budget: 150000
-  start-room-id: "builtin_start"
+  start-room-id: "builtin_modular"
+  # Empty string restores mixed room-template selection.
+  base-room-id: "builtin_modular"
   sign-min-rooms: 6
   path-blocking:
     enabled: true
@@ -43,3 +45,8 @@ bookshelf-return-gui:
 
 rooms:
   max-capture-volume: 100000
+
+props:
+  packing-attempts: 8
+  # Per-area collision/support cell checks, shared across attempts; capped at 1,000,000.
+  cell-check-budget: 200000

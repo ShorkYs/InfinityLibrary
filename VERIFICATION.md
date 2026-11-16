@@ -1,48 +1,57 @@
-# Version 2.1.0 verification — 2026-11-16
+# Version 2.2.0 verification — 2026-11-16
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
-## Build and unit tests
+## Build and automated tests
 
-Compilation, JAR packaging and **13 JUnit tests** passed with zero failures:
+Compilation, JAR packaging and **30 JUnit tests** passed with zero failures:
 
-- 3 geometry tests: transformed bounds/bijection, matching connectors, invalid connectors.
-- 5 layout-planner tests: retain alternatives to fit both sibling doors, reservations,
-  terrain/cap rejection, score with sibling obstacles, open-versus-blocked lookahead,
-  and avoid repeated terrain checks on each beam branch.
-- 5 manuscript tests: write/insert/navigate/delete pages, retain one editable page,
-  enforce page limits, preserve text after invalid input, require title/content for
-  publication, and reject invalid metadata without partially changing details.
+- 3 geometry tests and 5 layout-planner tests retained from 2.1.
+- 5 manuscript editing/validation tests retained from 2.1.
+- 12 prop-packing tests: five `2×1×1` props fill `2×5×1`; `2×3×1 + 2×2×1`
+  fill that same area; the equivalent horizontal strip; configurable empty space;
+  category/weight filtering; rotation-dependent fitting; bounded work; deterministic
+  catalog ordering/seeds; different layouts across seeds; nonoverlap/bounds/support
+  checks over 40 seeds; and floor-only placement/height clearance.
+- 5 prop/area persistence tests: template and frozen-composition round trips, legacy room
+  reads, room-area round trips, shell/door/overlap rejection, invalid settings and
+  rejection of snapshot blocks outside their areas.
 
-## Disposable Paper integration server
+## Actual Paper integration server
 
-**33 assertions passed** against the actual 26.3 server/API, covering:
+**52 assertions passed** on a disposable Paper 26.3 server, covering:
 
-- Starting-room construction, safe home and planner-driven room attachment.
-- Multiple sibling reservations before placement; reservations restored after reload
-  and a later process start; unfinished queued construction recovery; pause persistence.
-- Plugin data backup creation.
-- Main menu and writing desk construction, expected controls, administrator visibility,
-  holder/owner protections, shift-click/hotbar/drag cancellation and next-tick page actions.
-- Manuscript details and multiline pages saved to disk and reloaded.
-- Native multiline, book-details and search dialog construction through Paper's API.
-- Preview page preservation and private-book ownership.
-- Signing with player authorship, blank-book consumption, publishing and collection reload.
-- Injected collection-write failure: publication rolls back and does not consume payment.
-- Refusal to consume a book & quill containing existing text.
+- Standard modular room creation with four empty placeholders and floor-only defaults.
+- Different decorations for different room instances and starter prop availability.
+- Two-click area staging, room-local coordinates, permission checks and stale-selection
+  rejection after selecting a different region.
+- Directional block-state capture, prop-catalog persistence and a custom prop-bearing room.
+- Decoration resolved before block placement, catalog edits affecting future compositions,
+  and a pending room retaining its frozen blocks after source-prop edits/deletion/reload.
+- Correct world positions and transformed facing for the frozen prop blocks.
+- Prop-browser construction and ordinary players not receiving prop-authoring controls.
+- Previous construction/reload/reservation/pause/home/backup checks.
+- Main menu/writer construction, transfer/drag/hotbar protections, ownership and permission
+  checks, deferred actions, native dialog construction, draft persistence, signing,
+  publication, private ownership, collection reload, and payment preservation/rollback
+  after an injected storage-write failure.
 
-The companion plugin source is in `verification/`. It runs only on a **disposable test
-server**: it resets the library and shuts down the server. Do not install it in production.
-Its player/inventory protocol is simulated with Java proxies while the Paper world,
-inventories, item metadata, dialogs and persistence use the actual server/API.
+The companion source is in `verification/`. It **resets the library, writes test props,
+changes disposable-server config, and shuts down that server**. Never install it on a
+valuable or production server. Its player/inventory protocol is simulated using Java
+proxies, while Paper world blocks, metadata, dialogs and YAML persistence are real.
 
-## Scope and remaining manual verification
+## Remaining manual verification
 
-No Minecraft client was connected. These checks do not prove visual appearance,
-client dialog input/response routing, multiplayer inventory synchronization, accessibility,
-or compatibility with other plugins. Test the real UI with a 26.3 client and two accounts
-before using it on a valuable world. Also test with your custom templates and player load.
-The bounded planner does not guarantee a globally optimal or entirely connected layout.
+No Minecraft client was connected. These checks do not prove client rendering, dialog
+response routing, multiplayer inventory synchronization, visual prop composition, or
+third-party plugin compatibility. Test with a 26.3 client and your actual prop library
+before using this on a valuable world. Load/performance capacity is not certified.
 
-Minecraft authentication/discovery requests were unavailable in this environment; local
-server tests ran in offline mode on loopback. Production server settings are not included.
+Prop filling and room layout use bounded heuristics rather than exhaustive/global
+optimization. Packing support uses occupied bounding boxes, not physical block solidity
+or gravity. Some valid areas can remain partly empty when templates or budgets constrain
+fitting. Template capture still excludes entities and full block-entity NBT.
+
+Authentication/discovery services were unavailable in this environment; the local test
+server ran in offline mode on loopback. Production server settings are not included.

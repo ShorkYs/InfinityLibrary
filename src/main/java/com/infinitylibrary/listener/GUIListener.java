@@ -26,6 +26,7 @@ public class GUIListener implements Listener {
                 if(!p.isOnline() || !p.hasPermission("infinitylibrary.command") || p.getOpenInventory().getTopInventory().getHolder()!=menu) return;
                 try {
                     if(menu.screen()==LibraryMenu.Screen.MAIN) plugin.getGuiManager().mainMenuAction(p,slot);
+                    else if(menu.screen()==LibraryMenu.Screen.PROPS) plugin.getPropManager().menuAction(p,slot);
                     else plugin.getBookWritingManager().handle(p,menu.screen(),slot);
                 } catch(RuntimeException ex) { p.sendMessage(ChatColor.RED+ex.getMessage()); }
             });

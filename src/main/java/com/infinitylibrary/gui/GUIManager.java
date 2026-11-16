@@ -37,6 +37,7 @@ public class GUIManager {
         writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
         writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
         if(player.hasPermission("infinitylibrary.admin")) {
+            writer.icon(inv,44,Material.ARMOR_STAND,"§6Room props","§7Reusable props and placeholder area wand");
             writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
             writer.icon(inv,48,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"§aResume expansion":"§ePause expansion","§7Queued block placement continues");
         }
@@ -52,6 +53,7 @@ public class GUIManager {
             case 32 -> openLecternBookEditor(player);
             case 34 -> openBookshelfReturn(player,null);
             case 40 -> { boolean given=plugin.getBookStorageManager().giveDailyWritableBook(player); player.sendMessage(given?"Book & quill added to your inventory.":"Unable to claim: check your daily limit and inventory space."); openMainMenu(player); }
+            case 44 -> { if(player.hasPermission("infinitylibrary.admin")) plugin.getPropManager().browser(player); }
             case 46 -> { if(player.hasPermission("infinitylibrary.admin")) openRoomEditor(player); }
             case 48 -> { if(player.hasPermission("infinitylibrary.admin")) { var engine=plugin.getGenerationEngine(); engine.setPaused(!engine.isPaused()); openMainMenu(player); } }
             case 49 -> player.closeInventory();
@@ -161,7 +163,7 @@ public class GUIManager {
         int slot = 19;
         for (var room : plugin.getRoomManager().allRooms()) {
             if (slot >= 54) break;
-            inv.setItem(slot++, item(Material.BOOK, "&b" + room.id(), List.of("&7Type: &f" + room.type(), "&7Connections: &f" + room.connections().size(), "&7Variations: &f" + room.variations().size(), "&eUse /il applyvariations " + room.id())));
+            inv.setItem(slot++, item(Material.BOOK, "&b" + room.id(), List.of("&7Type: &f" + room.type(), "&7Connections: &f" + room.connections().size(), "&7Prop areas: &f" + room.propAreas().size(), "&7Variations: &f" + room.variations().size(), "&eUse /il applyvariations " + room.id())));
         }
         player.openInventory(inv);
     }

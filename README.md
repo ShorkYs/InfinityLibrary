@@ -1,14 +1,36 @@
-# Infinity Library 2.1
+# Infinity Library 2.2
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.1.0.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.1.0-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.2.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.2.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Modular rooms and reusable props (new in 2.2)
+
+Future expansion now defaults to **one standard empty room**, `builtin_modular`, with
+four prop areas and clear paths between its doors. Shelves, benches, tables, plants
+and lecterns are selected from reusable prop templates for each instance. Existing
+built rooms stay as they are.
+
+Use `/il props` (or the administrator **Room props** menu button) to inspect the catalog
+and get the prop-area wand. Build your own props, capture them with
+`/il saveprop <id> <category> [weight]`, and mark differently sized areas in your room.
+The filler combines multiple smaller props, optionally rotates them, and can leave gaps.
+For example, a five-unit strip can use five one-unit props or a three-unit and two-unit prop.
+
+**[Prop-area setup guide and commands](PROPS.md)** explains dimensions, floor versus
+stacked filling, categories, relative weights, placeholder clearing and the authoring
+workflow. New settings and saved per-room decoration snapshots are compatible with
+existing 2.1 data; snapshots stop reloads or later prop edits from rerolling built rooms.
+
+`/il baseroom <id>` chooses a single standard template and discards old future reservations.
+It also sets the start template for the **next reset**. `/il baseroom all` restores the
+older mixed-template selection mode. Neither command rebuilds existing rooms.
 
 ## Main menu
 
@@ -125,7 +147,7 @@ placed **or reserved** rooms cannot be deleted/replaced; save revisions under a 
 Use `/il reset confirm` only if you intend to remove generated rooms and reservations.
 
 Variation, bookshelf-category and reading-region wands from 2.0 remain available.
-Run `/il help` for the complete command list. Six built-in templates provide a starting
+Run `/il help` for the complete command list. Seven built-in templates provide a modular room, starting
 junction, book room, reading room, vertical connector, gallery and lounge.
 
 ## Other commands and permissions
@@ -151,8 +173,8 @@ are command aliases. The server's calendar/timezone defines daily draft claims.
 ## Upgrading and limitations
 
 Stop the server, back up the world and plugin folder, replace the old JAR, then restart
-with Paper 26.3/Java 25. Existing 2.0 YAML data is read directly; existing placed rooms are
-not rebuilt by the upgrade. New plans form as doors are approached. `drafts.yml` is new.
+with Paper 26.3/Java 25. Existing 2.0/2.1 YAML data is read directly; existing placed rooms are
+not rebuilt by the upgrade. New plans form as doors are approached. `props.yml` stores reusable props; room areas are in `rooms.yml`, and resolved decoration is in `generated.yml`.
 
 New worlds use an empty generator; existing terrain worlds are not converted. Use a
 world dedicated to this plugin. Changing the configured world while loading another
@@ -172,7 +194,7 @@ plugin; they are not DRM against server administrators or other plugins.
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.1.0.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.2.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, multi-door planning and manuscript editing/validation.

@@ -56,7 +56,7 @@ public class GenerationEngine {
         load();
         ensureWorld();
         for (PlacedRoom pr : placed) if (pending.contains(pr.origin().toString()))
-            roomManager.get(pr.roomId()).ifPresent(r -> queuePlacement(r, pr.origin(), pr.transform()));
+            roomManager.get(pr.roomId()).ifPresent(r -> queuePlacement(r, pr));
         if (placed.isEmpty()) resetToStart();
         int perTick = Math.max(1, plugin.getConfig().getInt("generation.placement-blocks-per-tick", 1800));
         taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, () -> { for (int i=0;i<perTick;i++) { Runnable r = placementQueue.poll(); if (r == null) break; r.run(); } }, 1L, 1L);
@@ -138,7 +138,8 @@ public class GenerationEngine {
             options.put(cp.id(),candidates);
         }
         int[] budget={Math.max(1000,Math.min(1000000,plugin.getConfig().getInt("generation.planning.world-block-budget",150000)))};
-        List<Room> catalog=roomManager.allRooms().stream().filter(r -> !r.id().equals(plugin.getConfig().getString("generation.start-room-id","builtin_start"))).toList();
+        String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
+        List<Room> catalog=roomManager.allRooms().stream().filter(r -> base!=null&&!base.isBlank()?r.id().equals(base):!r.id().equals(plugin.getConfig().getString("generation.start-room-id","builtin_start"))).toList();
         LayoutPlanner.Result result=planner.plan(options,occupied,
             Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.beam-width",12))),capacity,
             c -> isWorldClear(c.origin(),c.box().size(),budget),
@@ -169,7 +170,7 @@ public class GenerationEngine {
         pending.add(pr.origin().toString());
         // Reserve the child's open exits before its first block is placed.
         planParent(pr,null,null);
-        queuePlacement(c.room(),c.origin(),c.transform()); save(); return true;
+        queuePlacement(c.room(),pr); save(); return true;
     }
 
     private void connectExistingExits(PlacedRoom next,Room room) {
@@ -217,12 +218,14 @@ public class GenerationEngine {
             Room start = roomManager.get(plugin.getConfig().getString("generation.start-room-id", "builtin_start")).orElseThrow();
             Vector3i origin = new Vector3i(plugin.getConfig().getInt("start-location.x"), plugin.getConfig().getInt("start-location.y"), plugin.getConfig().getInt("start-location.z"));
             PlacedRoom pr = new PlacedRoom(UUID.randomUUID(), start.id(), origin, start.size());
-            placed.add(pr); queuePlacement(start, origin, RoomTransform.IDENTITY);
+            placed.add(pr); queuePlacement(start, pr);
         }
         save();
     }
 
-    private void queuePlacement(Room room, Vector3i origin, RoomTransform transform) {
+    private void queuePlacement(Room room, PlacedRoom instance) {
+        Vector3i origin=instance.origin();RoomTransform transform=instance.transform();
+        if(instance.props()==null)instance.props(plugin.getPropManager().compose(room,instance.instanceId()));
         World w = ensureWorld();
         pending.add(origin.toString());
         for (RoomBlock rb : room.blocks()) {
@@ -248,6 +251,22 @@ public class GenerationEngine {
                 }
                 break;
             }
+        }
+        for(com.infinitylibrary.props.PropArea area:instance.props().areas()) {
+            for(int y=0;y<area.size().y();y++)for(int z=0;z<area.size().z();z++)for(int x=0;x<area.size().x();x++) {
+                Vector3i local=area.min().add(new Vector3i(x,y,z));
+                Vector3i pos=origin.add(transform.transform(local,room.size()));
+                placementQueue.add(() -> w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false));
+            }
+        }
+        for(RoomBlock rb:instance.props().blocks()) {
+            Vector3i pos=origin.add(transform.transform(rb.position(),room.size()));
+            BlockData data=Bukkit.createBlockData(rb.blockData());rotateData(data,transform);
+            placementQueue.add(() -> {
+                Block block=w.getBlockAt(pos.x(),pos.y(),pos.z());block.setBlockData(data,false);
+                if(block.getType()==Material.CHISELED_BOOKSHELF)plugin.getBookStorageManager().populateBookshelf(block);
+                if(block.getState() instanceof Sign sign)updateLibrarySign(sign,pos);
+            });
         }
         placementQueue.add(() -> { pending.remove(origin.toString()); save(); });
     }
@@ -346,7 +365,7 @@ public class GenerationEngine {
 
     public void save() {
         YamlConfiguration y = new YamlConfiguration(); y.set("pending", new ArrayList<>(pending)); y.set("paused", paused); y.set("world", plugin.getConfig().getString("world")); y.set("sealed-blocks", sealedBlocks.stream().map(Vector3i::toString).toList()); ConfigurationSection root = y.createSection("rooms"); int i=0;
-        synchronized (placed) { for (PlacedRoom pr : placed) { ConfigurationSection s = root.createSection(String.valueOf(i++)); s.set("uuid", pr.instanceId().toString()); s.set("room-id", pr.roomId()); pr.origin().write(s.createSection("origin")); pr.size().write(s.createSection("size")); writeTransform(s.createSection("transform"), pr.transform()); s.set("generated-connections", new ArrayList<>(pr.generatedConnections())); } }
+        synchronized (placed) { for (PlacedRoom pr : placed) { ConfigurationSection s = root.createSection(String.valueOf(i++)); s.set("uuid", pr.instanceId().toString()); s.set("room-id", pr.roomId()); pr.origin().write(s.createSection("origin")); pr.size().write(s.createSection("size")); writeTransform(s.createSection("transform"), pr.transform()); s.set("generated-connections", new ArrayList<>(pr.generatedConnections())); if(pr.props()!=null)pr.props().write(s.createSection("props")); } }
         ConfigurationSection plans=y.createSection("plans"); int j=0;
         for(Reservation r:reservations.values()) {
             ConfigurationSection s=plans.createSection(String.valueOf(j++));
@@ -362,11 +381,16 @@ public class GenerationEngine {
         pending.addAll(y.getStringList("pending")); paused = y.getBoolean("paused");
         for (String v : y.getStringList("sealed-blocks")) sealedBlocks.add(Vector3i.parse(v));
         ConfigurationSection root = y.getConfigurationSection("rooms"); if (root == null) return;
-        for (String key : root.getKeys(false)) { ConfigurationSection s = root.getConfigurationSection(key); PlacedRoom pr = new PlacedRoom(UUID.fromString(s.getString("uuid")), s.getString("room-id"), Vector3i.read(s.getConfigurationSection("origin")), Vector3i.read(s.getConfigurationSection("size")), readTransform(s.getConfigurationSection("transform"))); pr.generatedConnections().addAll(s.getStringList("generated-connections")); placed.add(pr); }
+        for (String key : root.getKeys(false)) { ConfigurationSection s = root.getConfigurationSection(key); PlacedRoom pr = new PlacedRoom(UUID.fromString(s.getString("uuid")), s.getString("room-id"), Vector3i.read(s.getConfigurationSection("origin")), Vector3i.read(s.getConfigurationSection("size")), readTransform(s.getConfigurationSection("transform"))); pr.generatedConnections().addAll(s.getStringList("generated-connections"));
+            if(s.isConfigurationSection("props"))pr.props(com.infinitylibrary.props.PropComposition.read(s.getConfigurationSection("props")));
+            else if(!pending.contains(pr.origin().toString()))pr.props(com.infinitylibrary.props.PropComposition.EMPTY);
+            placed.add(pr); }
         ConfigurationSection plans=y.getConfigurationSection("plans");
         if(plans!=null) for(String key:plans.getKeys(false)) try {
             var s=plans.getConfigurationSection(key); UUID parent=UUID.fromString(s.getString("parent"));
             Room room=roomManager.get(s.getString("room")).orElseThrow(); String door=s.getString("door");
+            String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
+            if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
             PlacedRoom owner=placed.stream().filter(p -> p.instanceId().equals(parent)).findFirst().orElseThrow();
             if(owner.generatedConnections().contains(door)) continue;
             reservations.put(key(parent,door),new Reservation(parent,door,new LayoutPlanner.Candidate(room,s.getString("entrance"),readTransform(s.getConfigurationSection("transform")),Vector3i.read(s.getConfigurationSection("origin")))));
@@ -382,6 +406,7 @@ public class GenerationEngine {
         return new RoomTransform(Rotation.valueOf(s.getString("rotation", Rotation.NONE.name())), s.getBoolean("flip-x", false), s.getBoolean("flip-z", false));
     }
     public boolean roomLimitReached() { int limit = plugin.getConfig().getInt("generation.max-total-rooms", 0); return limit > 0 && placed.size() >= limit; }
+    public void replanFutureRooms() { reservations.clear();lastPlanAttempt.clear();save(); }
     public int plannedCount() { return reservations.size(); }
     public int placedCount() { return placed.size(); }
     public int queuedBlocks() { return placementQueue.size(); }

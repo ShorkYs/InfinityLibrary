@@ -5,6 +5,9 @@ import java.util.Set;
 import java.util.UUID;
 
 public class PlacedRoom {
+    private com.infinitylibrary.props.PropComposition props;
+    public com.infinitylibrary.props.PropComposition props() { return props; }
+    public void props(com.infinitylibrary.props.PropComposition props) { this.props=props; }
     private final UUID instanceId;
     private final String roomId;
     private final Vector3i origin;

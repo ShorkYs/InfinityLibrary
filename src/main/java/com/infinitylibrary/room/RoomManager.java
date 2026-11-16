@@ -2,6 +2,7 @@ package com.infinitylibrary.room;
 
 import com.infinitylibrary.InfinityLibraryPlugin;
 import com.infinitylibrary.model.*;
+import com.infinitylibrary.props.PropArea;
 import org.bukkit.Material;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -77,6 +78,7 @@ public class RoomManager {
     }
 
     public SelectionBounds selectionBounds(Player p) {
+        if(!p.getWorld().getUID().equals(selectionWorld.get(p.getUniqueId())))throw new IllegalArgumentException("Select both corners in your current world.");
         Vector3i a = pos1.get(p.getUniqueId()), b = pos2.get(p.getUniqueId());
         if (a == null || b == null) throw new IllegalArgumentException("Set both selection positions before using the connection wand");
         return new SelectionBounds(
@@ -103,14 +105,16 @@ public class RoomManager {
             Vector3i v = cp.position();
             if (!ids.add(cp.id()) || v.x()<0 || v.y()<0 || v.z()<0 || v.x()>maxX-minX || v.y()>maxY-minY || v.z()>maxZ-minZ) throw new IllegalArgumentException("Duplicate or out-of-bounds connection: " + cp.id());
         }
+        List<PropArea> areas=plugin.getPropManager().staged(player);
+        Room.validatePropAreas(new Vector3i(maxX-minX+1,maxY-minY+1,maxZ-minZ+1),connections,areas);
         List<RoomBlock> blocks = new ArrayList<>();
         for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
             Block block = w.getBlockAt(x, y, z);
-            if (block.getType() != Material.AIR && block.getType() != Material.CAVE_AIR && block.getType() != Material.VOID_AIR) {
+            if (!block.getType().isAir() && areas.stream().noneMatch(area -> area.contains(Vector3i.from(block.getLocation()).subtract(new Vector3i(minX,minY,minZ))))) {
                 blocks.add(new RoomBlock(new Vector3i(x - minX, y - minY, z - minZ), block.getBlockData().getAsString()));
             }
         }
-        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0);
+        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas);
         rooms.put(id, room);
         save();
         return room;
@@ -120,7 +124,9 @@ public class RoomManager {
         List<RoomSelection> candidates = new ArrayList<>();
         String startRoomId = plugin.getConfig().getString("generation.start-room-id", "builtin_start");
         for (Room room : rooms.values()) {
-            if (room.id().equals(startRoomId)) continue;
+            String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
+            if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
+            if ((base==null||base.isBlank())&&room.id().equals(startRoomId)) continue;
             if (preferBook && room.type() != RoomType.BOOK) continue;
             if (room.spawnChance() <= 0 || Math.random() * 100.0 >= room.spawnChance()) continue;
             for (ConnectionPoint cp : room.connections()) for (RoomTransform transform : RoomTransform.all()) {
@@ -137,7 +143,9 @@ public class RoomManager {
         List<RoomSelection> candidates = new ArrayList<>();
         String startRoomId = plugin.getConfig().getString("generation.start-room-id", "builtin_start");
         for (Room room : rooms.values()) {
-            if (room.id().equals(startRoomId)) continue;
+            String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
+            if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
+            if ((base==null||base.isBlank())&&room.id().equals(startRoomId)) continue;
             if (preferBook && room.type() != RoomType.BOOK) continue;
             if (room.spawnChance() <= 0 || Math.random() * 100.0 >= room.spawnChance()) continue;
             for (ConnectionPoint cp : room.connections()) for (RoomTransform transform : RoomTransform.all()) {
@@ -157,7 +165,7 @@ public class RoomManager {
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
         List<VariationArea> merged = new ArrayList<>(existing.variations());
         merged.addAll(additions);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance());
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance(),existing.propAreas());
         rooms.put(roomId, updated);
         save();
     }
@@ -166,12 +174,31 @@ public class RoomManager {
         if (!Double.isFinite(chance) || chance < 0 || chance > 100) throw new IllegalArgumentException("Chance must be finite and between 0 and 100.");
         Room existing = rooms.get(roomId);
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance);
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance,existing.propAreas());
         rooms.put(roomId, updated);
         save();
     }
 
+    public void updatePropAreas(String roomId,List<PropArea> areas) {
+        Room old=get(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found: "+roomId));
+        if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing prop areas.");
+        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),
+            old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas);
+        rooms.put(roomId,next);
+        try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}
+        plugin.getGenerationEngine().replanFutureRooms();
+    }
+
     private void addBuiltinRooms() {
+        List<ConnectionPoint> exits=List.of(new ConnectionPoint("north",new Vector3i(5,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(5,1,10),BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,5),BlockFace.WEST,3,3),new ConnectionPoint("east",new Vector3i(10,1,5),BlockFace.EAST,3,3));
+        Room shell=rectangular("builtin_modular",RoomType.FILLER,11,7,11,exits,false,false);
+        List<RoomBlock> plain=shell.blocks().stream().map(b -> new RoomBlock(b.position(),b.blockData().equals("minecraft:bookshelf")?"minecraft:dark_oak_planks":b.blockData())).toList();
+        List<PropArea> areas=List.of(
+            new PropArea("northwest",new Vector3i(1,1,1),new Vector3i(3,3,3),"library",15,true,false),
+            new PropArea("northeast",new Vector3i(7,1,1),new Vector3i(3,3,3),"library",15,true,false),
+            new PropArea("southwest",new Vector3i(1,1,7),new Vector3i(3,3,3),"library",15,true,false),
+            new PropArea("southeast",new Vector3i(7,1,7),new Vector3i(3,3,3),"library",15,true,false));
+        rooms.put("builtin_modular",new Room(shell.id(),shell.type(),shell.size(),shell.connections(),plain,List.of(),100,areas));
         rooms.put("builtin_start", rectangular("builtin_start", RoomType.FILLER, 9, 6, 9,
                 List.of(new ConnectionPoint("north", new Vector3i(4,1,0), BlockFace.NORTH,3,3), new ConnectionPoint("south", new Vector3i(4,1,8), BlockFace.SOUTH,3,3), new ConnectionPoint("east", new Vector3i(8,1,4), BlockFace.EAST,3,3), new ConnectionPoint("west", new Vector3i(0,1,4), BlockFace.WEST,3,3)), false, false));
         rooms.put("builtin_book", rectangular("builtin_book", RoomType.BOOK, 9, 6, 7,
