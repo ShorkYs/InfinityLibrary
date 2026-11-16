@@ -20,12 +20,13 @@ public class GUIListener implements Listener {
         if(e.getView().getTopInventory().getHolder() instanceof LibraryMenu menu) {
             e.setCancelled(true);
             if(!(e.getWhoClicked() instanceof Player p) || !menu.owner().equals(p.getUniqueId()) || e.getRawSlot()<0 || e.getRawSlot()>=menu.getInventory().getSize()) return;
-            if(e.getClick()!=ClickType.LEFT && e.getClick()!=ClickType.RIGHT) return;
+            if(e.getClick()!=ClickType.LEFT && e.getClick()!=ClickType.RIGHT && !(menu.screen()==LibraryMenu.Screen.ROOMS&&e.getClick()==ClickType.SHIFT_RIGHT)) return;
             int slot=e.getRawSlot();
             plugin.getServer().getScheduler().runTask(plugin,() -> {
                 if(!p.isOnline() || !p.hasPermission("infinitylibrary.command") || p.getOpenInventory().getTopInventory().getHolder()!=menu) return;
                 try {
                     if(menu.screen()==LibraryMenu.Screen.MAIN) plugin.getGuiManager().mainMenuAction(p,slot);
+                    else if(java.util.Set.of(LibraryMenu.Screen.ROOMS,LibraryMenu.Screen.ROOM_DETAILS,LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS).contains(menu.screen())) plugin.getGuiManager().roomMenuAction(p,menu,slot,e.getClick()==ClickType.SHIFT_RIGHT);
                     else if(menu.screen()==LibraryMenu.Screen.PROPS) plugin.getPropManager().menuAction(p,slot);
                     else plugin.getBookWritingManager().handle(p,menu.screen(),slot);
                 } catch(RuntimeException ex) { p.sendMessage(ChatColor.RED+ex.getMessage()); }
@@ -36,31 +37,6 @@ public class GUIListener implements Listener {
         if (title.equals(plugin.getGuiManager().statsTitle())) {
             e.setCancelled(true);
             if(e.getRawSlot()==22 && e.getWhoClicked() instanceof Player p) plugin.getServer().getScheduler().runTask(plugin,() -> plugin.getGuiManager().openMainMenu(p));
-            return;
-        }
-        if (title.equals(plugin.getGuiManager().roomEditorTitle())) {
-            e.setCancelled(true);
-            if (!(e.getWhoClicked() instanceof Player player) || !player.hasPermission("infinitylibrary.admin") || e.getRawSlot() < 0 || e.getRawSlot() >= e.getView().getTopInventory().getSize()) return;
-            ItemStack clicked = e.getCurrentItem();
-            if (clicked == null || !clicked.hasItemMeta() || clicked.getItemMeta().getDisplayName() == null) return;
-            String name = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
-            if (name == null || name.isBlank() || name.equals("Create New Room")) return;
-            if (e.getClick() == ClickType.SHIFT_RIGHT) {
-                try { plugin.getRoomManager().delete(name); player.sendMessage(ChatColor.LIGHT_PURPLE + "Deleted room: " + name); }
-                catch (Exception ex) { player.sendMessage(ChatColor.RED + ex.getMessage()); }
-                plugin.getGuiManager().openRoomEditor(player);
-                return;
-            }
-            if (e.getClick().isLeftClick()) plugin.getGuiManager().openRoomDetails(player, name);
-            return;
-        }
-        if (title.equals(plugin.getGuiManager().roomDetailsTitle())) {
-            e.setCancelled(true);
-            if (!(e.getWhoClicked() instanceof Player player)) return;
-            if (e.getRawSlot() == 11) {
-                player.closeInventory();
-                player.sendMessage(ChatColor.LIGHT_PURPLE + "Set new room bounds with /il pos1 and /il pos2, then save/edit the room.");
-            }
             return;
         }
         if (title.equals(plugin.getGuiManager().lecternBookEditorTitle())) {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.0
+
+- Added STARTING room type, automatic entrance selection on save/conversion, and explicit
+  `/il startroom` / `/il roomtype` commands. STARTING is excluded from every expansion path.
+- Decoupled `/il baseroom` from the entrance selection. Existing libraries are rebuilt
+  only when reset is explicitly requested.
+- Added persistent default/custom template removal, archived template retention for built
+  rooms, bulk default removal with role checks, and restoration/list-archive commands.
+- Added holder-backed room-management menus, STARTING controls, removal confirmation,
+  authoritative slot-to-template mapping and administrator checks.
+- Validated the start template and world height before reset clears existing room volumes.
+- Preserved legacy saved geometry and added atomic room-catalog file replacement.
+
 ## 2.2.0
 
 - Added one standard modular room with four independently filled prop areas, alongside

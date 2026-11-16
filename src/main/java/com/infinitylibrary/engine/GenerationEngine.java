@@ -122,7 +122,7 @@ public class GenerationEngine {
             ConnectionPoint target=cp.transform(parent.transform(),source.size());
             List<RoomManager.RoomSelection> selections;
             if(forcedRoom!=null && cp.id().equals(requested)) {
-                Room forced=roomManager.get(forcedRoom).orElseThrow(); selections=new ArrayList<>();
+                Room forced=roomManager.getActive(forcedRoom).filter(r -> r.type()!=RoomType.STARTING).orElseThrow(() -> new IllegalArgumentException("STARTING or archived rooms cannot be expanded into the library.")); selections=new ArrayList<>();
                 for(ConnectionPoint entry:forced.connections()) for(RoomTransform t:RoomTransform.all())
                     if(target.compatibleWith(entry.transform(t,forced.size()))) selections.add(new RoomManager.RoomSelection(forced,entry,t));
             } else selections=roomManager.compatibleSelections(target,false);
@@ -139,7 +139,7 @@ public class GenerationEngine {
         }
         int[] budget={Math.max(1000,Math.min(1000000,plugin.getConfig().getInt("generation.planning.world-block-budget",150000)))};
         String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
-        List<Room> catalog=roomManager.allRooms().stream().filter(r -> base!=null&&!base.isBlank()?r.id().equals(base):!r.id().equals(plugin.getConfig().getString("generation.start-room-id","builtin_start"))).toList();
+        List<Room> catalog=roomManager.expansionRooms();
         LayoutPlanner.Result result=planner.plan(options,occupied,
             Math.max(1,Math.min(32,plugin.getConfig().getInt("generation.planning.beam-width",12))),capacity,
             c -> isWorldClear(c.origin(),c.box().size(),budget),
@@ -155,6 +155,7 @@ public class GenerationEngine {
         PlacedRoom parent=placed.stream().filter(p -> p.instanceId().equals(reservation.parentId())).findFirst().orElse(null);
         if(parent==null || parent.generatedConnections().contains(reservation.doorId())) { reservations.remove(key(reservation.parentId(),reservation.doorId())); return false; }
         LayoutPlanner.Candidate c=reservation.candidate();
+        if(roomManager.getActive(c.room().id()).filter(r -> r.type()!=RoomType.STARTING).isEmpty()){replanFutureRooms();return false;}
         // Revalidate terrain and reservations immediately before mutating any blocks.
         if(!isWorldClear(c.origin(),c.box().size(),new int[]{Integer.MAX_VALUE})
             || placed.stream().anyMatch(p -> new LayoutPlanner.Box(p.origin(),p.size()).overlaps(c.box()))
@@ -209,13 +210,15 @@ public class GenerationEngine {
     }
 
     public void resetToStart() {
+        Room start=roomManager.getActive(roomManager.activeStartId()).orElseThrow(() -> new IllegalArgumentException("Active start template is missing. Restore it or select /il startroom <id> before resetting."));
         World w = ensureWorld();
+        int startY=plugin.getConfig().getInt("start-location.y");
+        if(startY<w.getMinHeight()||(long)startY+start.size().y()>w.getMaxHeight())throw new IllegalArgumentException("Starting room would exceed world height; fix /il setstart before resetting.");
         synchronized (placed) {
             for (PlacedRoom pr : placed) clearBox(w, pr.origin(), pr.size());
             for (Vector3i pos : sealedBlocks) w.getBlockAt(pos.x(), pos.y(), pos.z()).setType(Material.AIR, false);
             placed.clear(); placementQueue.clear(); pending.clear(); reservations.clear(); lastPlanAttempt.clear();
             sealedBlocks.clear();
-            Room start = roomManager.get(plugin.getConfig().getString("generation.start-room-id", "builtin_start")).orElseThrow();
             Vector3i origin = new Vector3i(plugin.getConfig().getInt("start-location.x"), plugin.getConfig().getInt("start-location.y"), plugin.getConfig().getInt("start-location.z"));
             PlacedRoom pr = new PlacedRoom(UUID.randomUUID(), start.id(), origin, start.size());
             placed.add(pr); queuePlacement(start, pr);
@@ -349,7 +352,8 @@ public class GenerationEngine {
     }
 
     public boolean placeRoomImmediately(String roomId) {
-        Room room=roomManager.get(roomId).orElse(null);
+        Room room=roomManager.getActive(roomId).orElse(null);
+        if(room!=null&&room.type()==RoomType.STARTING)return false;
         if(paused||roomLimitReached()||!placementQueue.isEmpty()||room==null) return false;
         for(PlacedRoom parent:List.copyOf(placed)) {
             Room source=roomManager.get(parent.roomId()).orElse(null); if(source==null) continue;
@@ -388,7 +392,7 @@ public class GenerationEngine {
         ConfigurationSection plans=y.getConfigurationSection("plans");
         if(plans!=null) for(String key:plans.getKeys(false)) try {
             var s=plans.getConfigurationSection(key); UUID parent=UUID.fromString(s.getString("parent"));
-            Room room=roomManager.get(s.getString("room")).orElseThrow(); String door=s.getString("door");
+            Room room=roomManager.getActive(s.getString("room")).filter(r -> r.type()!=RoomType.STARTING).orElseThrow(); String door=s.getString("door");
             String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
             if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
             PlacedRoom owner=placed.stream().filter(p -> p.instanceId().equals(parent)).findFirst().orElseThrow();

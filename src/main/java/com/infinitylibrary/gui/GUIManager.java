@@ -157,25 +157,70 @@ public class GUIManager {
 
     public String roomEditorTitle() { return color("&5Room Editor"); }
     public void openRoomEditor(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, roomEditorTitle());
-        for (int i=0;i<54;i++) inv.setItem(i, item(Material.GRAY_STAINED_GLASS_PANE, " ", List.of()));
-        inv.setItem(10, item(Material.EMERALD_BLOCK, "&aCreate New Room", List.of("&7Use wands, then /il saveroom")));
-        int slot = 19;
-        for (var room : plugin.getRoomManager().allRooms()) {
-            if (slot >= 54) break;
-            inv.setItem(slot++, item(Material.BOOK, "&b" + room.id(), List.of("&7Type: &f" + room.type(), "&7Connections: &f" + room.connections().size(), "&7Prop areas: &f" + room.propAreas().size(), "&7Variations: &f" + room.variations().size(), "&eUse /il applyvariations " + room.id())));
+        if(!player.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Missing permission infinitylibrary.admin");
+        LibraryMenu menu=new LibraryMenu(player,LibraryMenu.Screen.ROOMS,54,roomEditorTitle());Inventory inv=menu.getInventory();
+        for(int i=0;i<54;i++)inv.setItem(i,item(Material.GRAY_STAINED_GLASS_PANE," ",List.of()));
+        inv.setItem(10,item(Material.EMERALD_BLOCK,"&aCreate New Room",List.of("&7Select bounds and stage exits, then","&e/il saveroom <id> <type>","&7Types: STARTING, FILLER, BOOK, READ")));
+        inv.setItem(12,item(Material.BARRIER,"&cRemove Default Rooms",List.of("&7Choose a custom start/base first.","&7Opens a confirmation; built rooms stay.")));
+        inv.setItem(14,item(Material.CHEST,"&eRestore Removed Template",List.of("&e/il restoreroom <id>","&7Archived templates: "+plugin.getRoomManager().archivedIds().size())));
+        int slot=19;
+        for(var room:plugin.getRoomManager().allRooms()) {
+            if(slot>=54)break;menu.entry(slot,room.id());
+            inv.setItem(slot++,item(room.type()==com.infinitylibrary.model.RoomType.STARTING?Material.NETHER_STAR:Material.BOOK,"&b"+room.id(),List.of(
+                "&7Type: &f"+room.type(),"&7Connections: &f"+room.connections().size(),"&7Prop areas: &f"+room.propAreas().size(),
+                room.id().equals(plugin.getRoomManager().activeStartId())?"&aActive start for the next reset":"&7Click for room controls",
+                plugin.getRoomManager().isDefault(room.id())?"&7Default template":"&7Custom template","&cShift+right click to remove")));
         }
         player.openInventory(inv);
     }
-    public String roomDetailsTitle() { return color("&5Room Details"); }
-    public void openRoomDetails(Player player, String roomId) {
-        selectedRoom.put(player.getUniqueId(), roomId);
-        Inventory inv = Bukkit.createInventory(null, 27, roomDetailsTitle());
-        for (int i=0;i<27;i++) inv.setItem(i, item(Material.GRAY_STAINED_GLASS_PANE, " ", List.of()));
-        inv.setItem(11, item(Material.WOODEN_AXE, "&eEdit Selected Area", List.of("&7Use /il pos1 and /il pos2", "&7Then resave/edit room.")));
-        inv.setItem(13, item(Material.SLIME_BALL, "&aAdd Variations", List.of("&7Use variation wand then", "&7/il applyvariations " + roomId)));
-        inv.setItem(15, item(Material.BARRIER, "&cDelete Room", List.of("&7Shift+Right click from room list")));
+    public String roomDetailsTitle() {return color("&5Room Details");}
+    public void openRoomDetails(Player player,String roomId) {
+        if(!player.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Missing permission infinitylibrary.admin");
+        var room=plugin.getRoomManager().getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));
+        selectedRoom.put(player.getUniqueId(),roomId);
+        LibraryMenu menu=new LibraryMenu(player,LibraryMenu.Screen.ROOM_DETAILS,27,roomDetailsTitle());menu.entry(0,roomId);Inventory inv=menu.getInventory();
+        for(int i=0;i<27;i++)inv.setItem(i,item(Material.GRAY_STAINED_GLASS_PANE," ",List.of()));
+        inv.setItem(4,item(Material.BOOK,"&b"+roomId,List.of("&7Type: "+room.type(),"&7Active start: "+plugin.getRoomManager().activeStartId())));
+        inv.setItem(11,item(Material.WOODEN_AXE,"&eEdit Selected Area",List.of("&7Select bounds and save a new room ID.")));
+        inv.setItem(13,item(Material.SLIME_BALL,"&aAdd Variations",List.of("&e/il applyvariations "+roomId)));
+        inv.setItem(15,item(Material.BARRIER,"&cRemove Template",List.of("&7Built rooms keep their archived data.")));
+        inv.setItem(18,item(Material.NETHER_STAR,"&aUse As STARTING Room",List.of("&7Sets STARTING type and selects it.","&7Takes effect on the next library reset.","&7Never used for random expansion.")));
+        inv.setItem(20,item(Material.BRICKS,"&eUse As Expansion Base",List.of("&7Leaves the STARTING choice unchanged.","&7STARTING rooms cannot be a base.")));
+        inv.setItem(22,item(Material.ARROW,"&eRoom List",List.of()));
+        inv.setItem(24,item(Material.NAME_TAG,"&eChange Room Type",List.of("&e/il roomtype "+roomId+" <type>","&7STARTING, FILLER, BOOK or READ")));
         player.openInventory(inv);
+    }
+    public void roomMenuAction(Player p,LibraryMenu menu,int slot,boolean remove) {
+        if(!p.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Missing permission infinitylibrary.admin");
+        var manager=plugin.getRoomManager();
+        if(menu.screen()==LibraryMenu.Screen.ROOMS) {
+            if(slot==10){p.closeInventory();p.sendMessage("Select bounds and exits, then /il saveroom <id> <STARTING|FILLER|BOOK|READ>. STARTING is selected for the next reset.");return;}
+            if(slot==12){openDefaultRemoval(p);return;}
+            if(slot==14){p.sendMessage("Restore with /il restoreroom <id>. Archived: "+String.join(", ",manager.archivedIds()));return;}
+            String id=menu.entry(slot);if(id==null)return;
+            if(remove){manager.delete(id);p.sendMessage("Template removed; built rooms retained. /il restoreroom "+id+" restores it.");openRoomEditor(p);}
+            else openRoomDetails(p,id);
+        } else if(menu.screen()==LibraryMenu.Screen.ROOM_DETAILS) {
+            String id=menu.entry(0);
+            switch(slot) {
+                case 11 -> {p.closeInventory();p.sendMessage("Select bounds/exits, then save with a new room ID. Use STARTING for an entrance template.");}
+                case 13 -> p.sendMessage("/il applyvariations "+id);
+                case 15 -> {manager.delete(id);openRoomEditor(p);}
+                case 18 -> {manager.setRoomType(id,com.infinitylibrary.model.RoomType.STARTING);p.sendMessage("STARTING room selected for the next /il reset confirm. Existing rooms are unchanged.");openRoomDetails(p,id);}
+                case 20 -> {manager.chooseBase(id);p.sendMessage("Expansion base selected; the start room is unchanged.");openRoomDetails(p,id);}
+                case 22 -> openRoomEditor(p);
+                case 24 -> p.sendMessage("/il roomtype "+id+" <STARTING|FILLER|BOOK|READ>");
+            }
+        } else if(menu.screen()==LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS) {
+            if(slot==11){int count=manager.removeDefaults();p.sendMessage("Removed "+count+" default templates from generation/menus. Built rooms remain.");openRoomEditor(p);}
+            else if(slot==15)openRoomEditor(p);
+        }
+    }
+    private void openDefaultRemoval(Player p) {
+        LibraryMenu menu=new LibraryMenu(p,LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS,27,"Remove default templates?");var ui=plugin.getBookWritingManager();Inventory inv=menu.getInventory();
+        for(int i=0;i<27;i++)ui.icon(inv,i,Material.GRAY_STAINED_GLASS_PANE," ");
+        ui.icon(inv,4,Material.BOOK,"§eDefault template removal","§7Choose a custom STARTING room and base first.","§7Existing buildings are retained.","§7Removed templates can be restored.");
+        ui.icon(inv,11,Material.RED_CONCRETE,"§cConfirm removal");ui.icon(inv,15,Material.ARROW,"§eCancel");p.openInventory(inv);
     }
     public String selectedRoomId(Player player) { return selectedRoom.get(player.getUniqueId()); }
     private Material material(String path, Material fallback) { Material m = Material.matchMaterial(plugin.getConfig().getString(path, fallback.name())); return m == null ? fallback : m; }

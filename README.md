@@ -1,14 +1,31 @@
-# Infinity Library 2.2
+# Infinity Library 2.3
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.2.0.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.2.0-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.3.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.3.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Custom entrances and removable defaults (new in 2.3)
+
+Save your entrance as **`/il saveroom <id> STARTING`**. This automatically selects it for
+the next reset and excludes it from ordinary generation. Convert an existing template
+with `/il roomtype <id> STARTING`, or use **Use As STARTING Room** in room details.
+`/il startroom <id>` switches between saved entrances. Changing the expansion base no
+longer changes the entrance.
+
+After selecting your custom entrance and normal base, **`/il removedefaults confirm`**
+removes the packaged room templates from generation and menus, persistently. You can
+also remove one using `/il deleteroom <id>`. Built rooms retain archived template data,
+so their exits, home lookup and reset cleanup keep working. `/il restoreroom <id>` undoes
+a template removal.
+
+**[Starting-room and default-removal guide](ROOMS.md)** covers commands, menu controls,
+archives, and applying a new entrance with an intentional world reset.
 
 ## Modular rooms and reusable props (new in 2.2)
 
@@ -29,7 +46,7 @@ workflow. New settings and saved per-room decoration snapshots are compatible wi
 existing 2.1 data; snapshots stop reloads or later prop edits from rerolling built rooms.
 
 `/il baseroom <id>` chooses a single standard template and discards old future reservations.
-It also sets the start template for the **next reset**. `/il baseroom all` restores the
+It leaves the entrance selection unchanged. `/il baseroom all` restores the
 older mixed-template selection mode. Neither command rebuilds existing rooms.
 
 ## Main menu
@@ -143,8 +160,9 @@ Connections need matching width, height and floor index and opposite transformed
 Explicit exits: `/il addconnection <id> <x,y,z> <NORTH|EAST|SOUTH|WEST|UP|DOWN> <width> <height> [floor]`.
 Room IDs use 1–64 lowercase letters, digits, underscores or hyphens. Captures are limited
 to 100,000 bounding-box blocks by default (`rooms.max-capture-volume`). Templates used by
-placed **or reserved** rooms cannot be deleted/replaced; save revisions under a new ID.
-Use `/il reset confirm` only if you intend to remove generated rooms and reservations.
+built rooms can be removed from the active catalog and retained in the archive. Their
+geometry cannot be overwritten; save revisions under a new ID.
+Use `/il reset confirm` only if you intend to rebuild generated rooms and reservations.
 
 Variation, bookshelf-category and reading-region wands from 2.0 remain available.
 Run `/il help` for the complete command list. Seven built-in templates provide a modular room, starting
@@ -194,7 +212,7 @@ plugin; they are not DRM against server administrators or other plugins.
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.2.0.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.3.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, multi-door planning and manuscript editing/validation.

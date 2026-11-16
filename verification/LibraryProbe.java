@@ -23,6 +23,9 @@ public class LibraryProbe extends JavaPlugin {
     public void onEnable() {
         later(() -> {
             var p=(InfinityLibraryPlugin)Bukkit.getPluginManager().getPlugin("InfinityLibraryPlugin"); var e=p.getGenerationEngine();
+            var removed=YamlConfiguration.loadConfiguration(p.getDataFolder().toPath().resolve("rooms.yml").toFile()).getStringList("removed-default-rooms");
+            if(!removed.isEmpty())check(removed.stream().allMatch(id -> p.getRoomManager().getActive(id).isEmpty()),"removed defaults remain suppressed after process restart");
+            for(String id:new ArrayList<>(p.getRoomManager().archivedIds()))if(p.getRoomManager().isDefault(id))p.getRoomManager().restore(id);
             if(e.plannedCount()>0) check(true,"persisted sibling plans restored on process startup");
             try {var f=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(f);y.set("rooms.builtin_modular",null);y.save(f);p.reloadEverything();} catch(java.io.IOException ex){throw new RuntimeException(ex);}
             p.getConfig().set("generation.start-room-id","builtin_modular");p.getConfig().set("generation.base-room-id","builtin_modular");p.saveConfig();
@@ -161,7 +164,71 @@ public class LibraryProbe extends JavaPlugin {
         int pages=draft.pages().size(); listener.onClick(click);
         later(() -> {
             check(draft.pages().size()==pages+1,"writer page button runs safely on next tick");
-            getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED"); Bukkit.shutdown();
+            roomRoleChecks(p);
+        },5);
+    }
+    void roomRoleChecks(InfinityLibraryPlugin p) {
+        var rooms=p.getRoomManager();var e=p.getGenerationEngine();Fake fake=new Fake(p,true);Player author=fake.player;
+        int activeBefore=rooms.allRooms().size();boolean protectedBulk=false;
+        try{rooms.removeDefaults();}catch(IllegalArgumentException expected){protectedBulk=true;}
+        check(protectedBulk&&rooms.allRooms().size()==activeBefore,"bulk removal preflights selected defaults without partial deletion");
+        Room standard=rooms.getActive("builtin_modular").orElseThrow();World world=e.ensureWorld();Vector3i source=new Vector3i(2000,80,2000);
+        for(RoomBlock b:standard.blocks()){Vector3i at=source.add(b.position());world.getBlockAt(at.x(),at.y(),at.z()).setBlockData(Bukkit.createBlockData(b.blockData()),false);}
+        world.getBlockAt(source.x(),source.y(),source.z()).setType(Material.GOLD_BLOCK,false);
+        p.getRoomManager().setPos1(author,source.toLocation(world));p.getRoomManager().setPos2(author,source.add(standard.size()).subtract(new Vector3i(1,1,1)).toLocation(world));
+        for(ConnectionPoint cp:standard.connections())p.getSelectionManager().addStagedConnection(author,cp);
+        int built=e.placedCount();
+        new com.infinitylibrary.command.CommandHandler(p).onCommand(author,p.getCommand("infinitylibrary"),"il",new String[]{"saveroom","probe_start","STARTING"});
+        check(rooms.getActive("probe_start").orElseThrow().type()==RoomType.STARTING,"saveroom command captures STARTING type");
+        check(rooms.activeStartId().equals("probe_start"),"saving STARTING automatically selects the active start");
+        check(e.placedCount()==built&&e.queuedBlocks()==0,"saving STARTING does not expand it or reset the existing world");
+        rooms.capture(author,"probe_base",RoomType.FILLER,standard.connections());
+        rooms.chooseBase("probe_base");check(rooms.activeStartId().equals("probe_start"),"base selection leaves start selection unchanged");
+        boolean refused=false;try{rooms.chooseBase("probe_start");}catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"STARTING cannot be selected as an expansion base");
+        rooms.chooseBase("all");check(rooms.expansionRooms().stream().noneMatch(r -> r.type()==RoomType.STARTING),"mixed expansion excludes every STARTING template");rooms.chooseBase("probe_base");
+        check(!e.placeRoomImmediately("probe_start"),"manual placement cannot insert STARTING as an ordinary room");
+        refused=false;try{rooms.delete("probe_start");}catch(IllegalArgumentException expected){refused=true;}
+        check(refused&&rooms.getActive("probe_start").isPresent(),"active start is protected from removal");
+        refused=false;try{rooms.delete("probe_base");}catch(IllegalArgumentException expected){refused=true;}
+        check(refused&&rooms.getActive("probe_base").isPresent(),"active expansion base is protected from removal");
+        p.getGuiManager().openRoomEditor(author);LibraryMenu roomMenu=(LibraryMenu)fake.top.getHolder();
+        p.getGuiManager().roomMenuAction(author,roomMenu,12,false);
+        check(((LibraryMenu)fake.top.getHolder()).screen()==LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS,"bulk default removal has a holder-backed confirmation");
+        p.getGuiManager().roomMenuAction(author,(LibraryMenu)fake.top.getHolder(),15,false);
+        check(rooms.allRooms().stream().anyMatch(r -> rooms.isDefault(r.id())),"canceling default removal leaves catalog unchanged");
+        int defaults=(int)rooms.allRooms().stream().filter(r -> rooms.isDefault(r.id())).count();int placedBefore=e.placedCount();
+        int removed=rooms.removeDefaults();check(removed==defaults&&removed>0,"bulk command removes all active default templates");
+        check(rooms.allRooms().stream().noneMatch(r -> rooms.isDefault(r.id())),"removed defaults disappear from active generation catalog");
+        check(e.placedCount()==placedBefore&&rooms.get("builtin_modular").isPresent(),"built default rooms retain archived metadata without changing world rooms");
+        p.reloadEverything();
+        check(rooms.allRooms().stream().noneMatch(r -> rooms.isDefault(r.id())),"removed defaults stay removed after reload");
+        check(rooms.activeStartId().equals("probe_start")&&rooms.getActive("probe_start").orElseThrow().type()==RoomType.STARTING,"custom starting role and selection persist");
+        p.getGuiManager().openRoomEditor(author);LibraryMenu activeList=(LibraryMenu)fake.top.getHolder();boolean hidden=true;
+        for(int slot=19;slot<54;slot++){String id=activeList.entry(slot);if(id!=null&&rooms.isDefault(id))hidden=false;}
+        check(hidden,"room menu does not show removed defaults");
+        rooms.restore("builtin_book");p.reloadEverything();check(rooms.getActive("builtin_book").isPresent(),"restoring a default persists across reload");rooms.delete("builtin_book");
+        rooms.delete("probe_modular");p.reloadEverything();check(rooms.getActive("probe_modular").isEmpty()&&rooms.get("probe_modular").isPresent(),"used custom templates can also be archived safely");
+        check(e.homeLocation()!=null,"home still works through archived original start metadata");
+        String selected=rooms.activeStartId();p.getConfig().set("generation.start-room-id","missing-template");refused=false;
+        try{e.resetToStart();}catch(IllegalArgumentException expected){refused=true;}finally{p.getConfig().set("generation.start-room-id",selected);}
+        check(refused&&e.placedCount()==placedBefore,"invalid start is rejected before clearing generated rooms");
+        refused=false;try{rooms.setRoomType("probe_start",RoomType.FILLER);}catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"active STARTING room cannot be demoted before choosing another start");
+        Room alternate=rooms.capture(author,"probe_alternate",RoomType.FILLER,standard.connections());
+        p.getGuiManager().openRoomDetails(author,alternate.id());GUIListener listener=new GUIListener(p);
+        var click=new InventoryClickEvent(fake.view,InventoryType.SlotType.CONTAINER,18,ClickType.LEFT,InventoryAction.PICKUP_ALL);listener.onClick(click);
+        later(() -> {
+            check(rooms.activeStartId().equals(alternate.id())&&rooms.getActive(alternate.id()).orElseThrow().type()==RoomType.STARTING,"room-details button sets STARTING type and selects it");
+            check(p.getConfig().getString("generation.base-room-id").equals("probe_base"),"STARTING menu action preserves an independent normal base");
+            rooms.chooseStart("probe_start");e.resetToStart();
+            var data=YamlConfiguration.loadConfiguration(p.getDataFolder().toPath().resolve("generated.yml").toFile());
+            check(e.placedCount()==1&&data.getString("rooms.0.room-id").equals("probe_start"),"reset queues the selected custom start instead of a default");
+            later(() -> {
+                check(e.queuedBlocks()==0&&world.getBlockAt(0,80,0).getType()==Material.GOLD_BLOCK,"custom start blocks finish at configured entrance coordinates");
+                check(e.placeRoomImmediately("probe_base"),"normal expansion attaches to the custom STARTING room");
+                later(() -> {check(e.placedCount()==2&&e.queuedBlocks()==0,"custom library remains functional after all defaults are removed");getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();},30);
+            },30);
         },5);
     }
     final class Fake implements InvocationHandler {

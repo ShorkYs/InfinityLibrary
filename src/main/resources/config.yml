@@ -18,7 +18,7 @@ generation:
     candidates-per-door: 12
     max-doors: 16
     world-block-budget: 150000
-  start-room-id: "builtin_modular"
+  start-room-id: "builtin_start"
   # Empty string restores mixed room-template selection.
   base-room-id: "builtin_modular"
   sign-min-rooms: 6

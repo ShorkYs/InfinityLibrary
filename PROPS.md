@@ -14,9 +14,9 @@ matching prop, or a combination of smaller matching props.
 4. Walk to unexpanded exits. New standard rooms use four prop areas, with random shelves,
    benches, tables, plants and lecterns. Their central paths remain clear.
 
-On a fresh install the modular room is also the starting room. An existing world keeps
-its old start until you deliberately reset it. `/il baseroom <id>` also selects that start
-for the next reset. Reset removes generated rooms, so back up your world first.
+On a fresh 2.3 install a dedicated STARTING template uses the matching modular footprint.
+An existing world keeps its old entrance until you deliberately reset it. `/il baseroom <id>` selects only expansion; use `/il startroom <id>` for a STARTING template. See
+[ROOMS.md](ROOMS.md). Reset removes generated rooms, so back up your world first.
 
 ## Dimensions: X × Y × Z
 

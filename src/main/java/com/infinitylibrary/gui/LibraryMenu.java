@@ -8,10 +8,13 @@ import java.util.UUID;
 
 /** Holder identity prevents another inventory with a matching title from invoking actions. */
 public final class LibraryMenu implements InventoryHolder {
-    public enum Screen { PROPS, MAIN, WRITER, CONFIRM_PUBLISH, CONFIRM_DELETE }
+    public enum Screen { ROOMS, ROOM_DETAILS, CONFIRM_DEFAULT_ROOMS, PROPS, MAIN, WRITER, CONFIRM_PUBLISH, CONFIRM_DELETE }
     private final Inventory inventory;
     private final Screen screen;
     private final UUID owner;
+    private final java.util.Map<Integer,String> entries=new java.util.HashMap<>();
+    public void entry(int slot,String id) { entries.put(slot,id); }
+    public String entry(int slot) { return entries.get(slot); }
     public LibraryMenu(Player player, Screen screen, int size, String title) {
         this.owner=player.getUniqueId(); this.screen=screen;
         this.inventory=Bukkit.createInventory(this,size,title);

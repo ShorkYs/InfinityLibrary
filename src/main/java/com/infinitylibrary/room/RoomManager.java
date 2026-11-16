@@ -20,7 +20,9 @@ import java.util.logging.Level;
 public class RoomManager {
     private final InfinityLibraryPlugin plugin;
     private final File roomFile;
-    private final Map<String, Room> rooms = new LinkedHashMap<>();
+    private final RoomCatalog catalog = new RoomCatalog();
+    private final Map<String, Room> rooms = catalog.activeMap();
+    private Map<String,Room> builtinRooms=Map.of();
     private final Map<UUID, UUID> selectionWorld = new HashMap<>();
     private final Map<UUID, Vector3i> pos1 = new HashMap<>();
     private final Map<UUID, Vector3i> pos2 = new HashMap<>();
@@ -31,38 +33,76 @@ public class RoomManager {
     }
 
     public void load() {
-        rooms.clear();
-        addBuiltinRooms();
-        if (!roomFile.exists()) save();
-        YamlConfiguration yml = YamlConfiguration.loadConfiguration(roomFile);
-        var root = yml.getConfigurationSection("rooms");
-        if (root != null) for (String id : root.getKeys(false)) {
-            try { rooms.put(id, Room.read(id, root.getConfigurationSection(id))); }
-            catch (Exception ex) { plugin.getLogger().log(Level.WARNING, "Skipping invalid room " + id, ex); }
-        }
+        rooms.clear();addBuiltinRooms();builtinRooms=new LinkedHashMap<>(rooms);
+        boolean missing=!roomFile.exists();
+        catalog.load(builtinRooms,YamlConfiguration.loadConfiguration(roomFile),plugin.getLogger()::warning);
+        if(missing)save();
     }
 
     public void save() {
-        YamlConfiguration yml = new YamlConfiguration();
-        var root = yml.createSection("rooms");
-        for (Room room : rooms.values()) room.write(root.createSection(room.id()));
-        try { yml.save(roomFile); } catch (IOException e) { throw new IllegalStateException("Unable to save rooms.yml", e); }
+        java.nio.file.Path target=roomFile.toPath(),temp=target.resolveSibling("rooms.yml.tmp");
+        try {
+            java.nio.file.Files.writeString(temp,catalog.write().saveToString());
+            try{java.nio.file.Files.move(temp,target,java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);}
+            catch(java.nio.file.AtomicMoveNotSupportedException e){java.nio.file.Files.move(temp,target,java.nio.file.StandardCopyOption.REPLACE_EXISTING);}
+        }catch(IOException e){throw new IllegalStateException("Unable to save rooms.yml",e);}
+    }
+    public Collection<Room> allRooms() {return catalog.active();}
+    /** Includes archives for generation/home/reset references; authoring commands use getActive. */
+    public Optional<Room> get(String id) {return catalog.get(id);}
+    public Optional<Room> getActive(String id) {return Optional.ofNullable(rooms.get(id));}
+    public boolean isDefault(String id) {return catalog.isDefault(id);}
+    public Set<String> archivedIds() {return catalog.archivedIds();}
+    public String activeStartId() {return plugin.getConfig().getString("generation.start-room-id","builtin_start");}
+    public List<Room> expansionRooms() {
+        String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
+        return rooms.values().stream().filter(r -> r.type()!=RoomType.STARTING && r.spawnChance()>0)
+            .filter(r -> base!=null&&!base.isBlank()?r.id().equals(base):!r.id().equals(activeStartId())).toList();
+    }
+    private void guardRemoval(String id) {
+        if(!rooms.containsKey(id))throw new IllegalArgumentException("Active room not found: "+id);
+        if(id.equals(activeStartId()))throw new IllegalArgumentException("Choose your custom STARTING room first: /il startroom <id>. This is the active start template.");
+        if(id.equals(plugin.getConfig().getString("generation.base-room-id","builtin_modular")))throw new IllegalArgumentException("Choose another expansion template first: /il baseroom <id|all>. This is the active base template.");
+    }
+    private void remove(Collection<String> ids) {
+        for(String id:ids)guardRemoval(id);
+        YamlConfiguration before=catalog.write();catalog.remove(ids);
+        try{save();}catch(RuntimeException e){catalog.load(builtinRooms,before,plugin.getLogger()::warning);throw e;}
+        plugin.getGenerationEngine().replanFutureRooms();
+    }
+    public void delete(String id) {remove(List.of(id));}
+    public int removeDefaults() {
+        List<String> ids=rooms.keySet().stream().filter(catalog::isDefault).toList();
+        if(!ids.isEmpty())remove(ids);return ids.size();
+    }
+    public void restore(String id) {
+        YamlConfiguration before=catalog.write();catalog.restore(id);
+        try{save();}catch(RuntimeException e){catalog.load(builtinRooms,before,plugin.getLogger()::warning);throw e;}
+        plugin.getGenerationEngine().replanFutureRooms();
+    }
+    public void chooseStart(String id) {
+        Room room=getActive(id).orElseThrow(() -> new IllegalArgumentException("Active room not found: "+id));
+        if(room.type()!=RoomType.STARTING)throw new IllegalArgumentException("Select a STARTING template, or use /il roomtype "+id+" STARTING.");
+        plugin.getConfig().set("generation.start-room-id",id);
+        if(id.equals(plugin.getConfig().getString("generation.base-room-id","builtin_modular")))plugin.getConfig().set("generation.base-room-id","");
+        plugin.saveConfig();plugin.getGenerationEngine().replanFutureRooms();
+    }
+    public void chooseBase(String id) {
+        if(!id.equalsIgnoreCase("all")){
+            Room room=getActive(id).orElseThrow(() -> new IllegalArgumentException("Active room not found: "+id));
+            if(room.type()==RoomType.STARTING)throw new IllegalArgumentException("STARTING rooms are reserved for the entrance. Choose a FILLER, BOOK or READ base.");
+        }
+        plugin.getConfig().set("generation.base-room-id",id.equalsIgnoreCase("all")?"":id);
+        plugin.saveConfig();plugin.getGenerationEngine().replanFutureRooms();
+    }
+    public void setRoomType(String id,RoomType type) {
+        Room old=getActive(id).orElseThrow(() -> new IllegalArgumentException("Active room not found: "+id));
+        if(old.type()==RoomType.STARTING&&type!=RoomType.STARTING&&id.equals(activeStartId()))throw new IllegalArgumentException("Select another active STARTING room before changing this room's type.");
+        Room next=new Room(old.id(),type,old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas());
+        rooms.put(id,next);try{save();}catch(RuntimeException e){rooms.put(id,old);throw e;}
+        if(type==RoomType.STARTING)chooseStart(id);else plugin.getGenerationEngine().replanFutureRooms();
     }
 
-    public Collection<Room> allRooms() { return Collections.unmodifiableCollection(rooms.values()); }
-    public Optional<Room> get(String id) { return Optional.ofNullable(rooms.get(id)); }
-    public void delete(String id) {
-        if (!rooms.containsKey(id)) throw new IllegalArgumentException("Room not found: " + id);
-        if (id.startsWith("builtin_") || plugin.getGenerationEngine().usesRoom(id)) throw new IllegalArgumentException("Cannot delete built-in or placed templates. Use /il roomchance <id> 0 to disable future spawning.");
-        rooms.remove(id);
-        String startId = plugin.getConfig().getString("generation.start-room-id", "builtin_start");
-        if (id.equals(startId)) {
-            String replacement = rooms.keySet().stream().findFirst().orElse("builtin_start");
-            plugin.getConfig().set("generation.start-room-id", replacement);
-            plugin.saveConfig();
-        }
-        save();
-    }
     public void setPos1(Player p) { setPos1(p, p.getLocation()); }
     public void setPos2(Player p) { setPos2(p, p.getLocation()); }
     public void setPos1(Player p, Location location) { checkSelectionWorld(p, location); pos1.put(p.getUniqueId(), Vector3i.from(location)); }
@@ -90,6 +130,7 @@ public class RoomManager {
     public record SelectionBounds(Vector3i min, Vector3i max) {}
 
     public Room capture(Player player, String id, RoomType type, List<ConnectionPoint> connections) {
+        if(id.startsWith("builtin_"))throw new IllegalArgumentException("Choose a custom ID; built-in IDs are reserved. Use /il roomtype to change a saved room role.");
         if (!id.matches("[a-z0-9_-]{1,64}")) throw new IllegalArgumentException("Room ID must use 1-64 lowercase letters, digits, underscores or hyphens.");
         if (plugin.getGenerationEngine().usesRoom(id)) throw new IllegalArgumentException("This template is already placed. Save under a new ID to preserve existing connections.");
         if (!player.getWorld().getUID().equals(selectionWorld.get(player.getUniqueId()))) throw new IllegalArgumentException("Select both corners in your current world.");
@@ -115,47 +156,25 @@ public class RoomManager {
             }
         }
         Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas);
-        rooms.put(id, room);
-        save();
+        Room previous=rooms.put(id,room);
+        try{save();}catch(RuntimeException e){if(previous==null)rooms.remove(id);else rooms.put(id,previous);throw e;}
+        if(type==RoomType.STARTING)chooseStart(id);
         return room;
     }
 
-    public Optional<RoomSelection> selectCompatible(ConnectionPoint target, boolean preferBook) {
-        List<RoomSelection> candidates = new ArrayList<>();
-        String startRoomId = plugin.getConfig().getString("generation.start-room-id", "builtin_start");
-        for (Room room : rooms.values()) {
-            String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
-            if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
-            if ((base==null||base.isBlank())&&room.id().equals(startRoomId)) continue;
-            if (preferBook && room.type() != RoomType.BOOK) continue;
-            if (room.spawnChance() <= 0 || Math.random() * 100.0 >= room.spawnChance()) continue;
-            for (ConnectionPoint cp : room.connections()) for (RoomTransform transform : RoomTransform.all()) {
-                ConnectionPoint transformed = cp.transform(transform, room.size());
-                if (target.compatibleWith(transformed)) candidates.add(new RoomSelection(room, cp, transform));
-            }
-        }
-        if (candidates.isEmpty() && preferBook) return selectCompatible(target, false);
-        if (candidates.isEmpty()) return Optional.empty();
-        return Optional.of(candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())));
+    public Optional<RoomSelection> selectCompatible(ConnectionPoint target,boolean preferBook) {
+        return compatibleSelections(target,preferBook).stream().findFirst();
     }
-
-    public List<RoomSelection> compatibleSelections(ConnectionPoint target, boolean preferBook) {
-        List<RoomSelection> candidates = new ArrayList<>();
-        String startRoomId = plugin.getConfig().getString("generation.start-room-id", "builtin_start");
-        for (Room room : rooms.values()) {
-            String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");
-            if(base!=null&&!base.isBlank()&&!room.id().equals(base))continue;
-            if ((base==null||base.isBlank())&&room.id().equals(startRoomId)) continue;
-            if (preferBook && room.type() != RoomType.BOOK) continue;
-            if (room.spawnChance() <= 0 || Math.random() * 100.0 >= room.spawnChance()) continue;
-            for (ConnectionPoint cp : room.connections()) for (RoomTransform transform : RoomTransform.all()) {
-                ConnectionPoint transformed = cp.transform(transform, room.size());
-                if (target.compatibleWith(transformed)) candidates.add(new RoomSelection(room, cp, transform));
-            }
+    public List<RoomSelection> compatibleSelections(ConnectionPoint target,boolean preferBook) {
+        List<RoomSelection> candidates=new ArrayList<>();
+        for(Room room:expansionRooms()) {
+            if(preferBook&&room.type()!=RoomType.BOOK)continue;
+            if(Math.random()*100>=room.spawnChance())continue;
+            for(ConnectionPoint cp:room.connections())for(RoomTransform transform:RoomTransform.all())
+                if(target.compatibleWith(cp.transform(transform,room.size())))candidates.add(new RoomSelection(room,cp,transform));
         }
-        if (candidates.isEmpty() && preferBook) return compatibleSelections(target, false);
-        Collections.shuffle(candidates);
-        return candidates;
+        if(candidates.isEmpty()&&preferBook)return compatibleSelections(target,false);
+        Collections.shuffle(candidates);return candidates;
     }
 
     public record RoomSelection(Room room, ConnectionPoint localConnection, RoomTransform transform) {}
@@ -180,7 +199,7 @@ public class RoomManager {
     }
 
     public void updatePropAreas(String roomId,List<PropArea> areas) {
-        Room old=get(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found: "+roomId));
+        Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found: "+roomId));
         if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing prop areas.");
         Room next=new Room(old.id(),old.type(),old.size(),old.connections(),
             old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas);
@@ -199,8 +218,7 @@ public class RoomManager {
             new PropArea("southwest",new Vector3i(1,1,7),new Vector3i(3,3,3),"library",15,true,false),
             new PropArea("southeast",new Vector3i(7,1,7),new Vector3i(3,3,3),"library",15,true,false));
         rooms.put("builtin_modular",new Room(shell.id(),shell.type(),shell.size(),shell.connections(),plain,List.of(),100,areas));
-        rooms.put("builtin_start", rectangular("builtin_start", RoomType.FILLER, 9, 6, 9,
-                List.of(new ConnectionPoint("north", new Vector3i(4,1,0), BlockFace.NORTH,3,3), new ConnectionPoint("south", new Vector3i(4,1,8), BlockFace.SOUTH,3,3), new ConnectionPoint("east", new Vector3i(8,1,4), BlockFace.EAST,3,3), new ConnectionPoint("west", new Vector3i(0,1,4), BlockFace.WEST,3,3)), false, false));
+        rooms.put("builtin_start",new Room("builtin_start",RoomType.STARTING,shell.size(),shell.connections(),plain,List.of(),100,areas));
         rooms.put("builtin_book", rectangular("builtin_book", RoomType.BOOK, 9, 6, 7,
                 List.of(new ConnectionPoint("west", new Vector3i(0,1,3), BlockFace.WEST,3,3), new ConnectionPoint("east", new Vector3i(8,1,3), BlockFace.EAST,3,3)), true, false));
         rooms.put("builtin_read", rectangular("builtin_read", RoomType.READ, 7, 6, 9,
