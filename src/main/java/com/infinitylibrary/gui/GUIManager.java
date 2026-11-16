@@ -21,6 +21,43 @@ public class GUIManager {
     private final Map<UUID, String> selectedRoom = new ConcurrentHashMap<>();
     public GUIManager(InfinityLibraryPlugin plugin) { this.plugin = plugin; }
 
+    public void openMainMenu(Player player) {
+        if (!player.hasPermission("infinitylibrary.command")) throw new IllegalArgumentException("Missing permission infinitylibrary.command");
+        plugin.getBookWritingManager().invalidate(player);
+        LibraryMenu menu = new LibraryMenu(player, LibraryMenu.Screen.MAIN, 54, "Infinity Library • Main Menu");
+        Inventory inv=menu.getInventory();
+        for(int i=0;i<54;i++) inv.setItem(i,item(Material.BLACK_STAINED_GLASS_PANE," ",List.of()));
+        var writer=plugin.getBookWritingManager();
+        writer.icon(inv,4,Material.ENCHANTED_BOOK,"§dInfinity Library","§7Books: "+plugin.getBookStorageManager().totalBooks(),"§7Rooms: "+plugin.getGenerationEngine().placedCount()+" · Planned: "+plugin.getGenerationEngine().plannedCount());
+        writer.icon(inv,20,Material.WRITABLE_BOOK,"§aWriting desk","§7Write pages, set a title and preview","§7Continue your saved manuscript");
+        writer.icon(inv,22,Material.COMPASS,"§bSearch books","§7Search title, author, category or tags");
+        writer.icon(inv,24,Material.BOOKSHELF,"§dLibrary statistics","§7Books, contributors and your activity");
+        writer.icon(inv,30,Material.ENDER_PEARL,"§bReturn to entrance","§7Teleport to the starting room");
+        writer.icon(inv,32,Material.LECTERN,"§aSubmit a signed book","§7Open the existing book submission editor");
+        writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
+        writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
+        if(player.hasPermission("infinitylibrary.admin")) {
+            writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
+            writer.icon(inv,48,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"§aResume expansion":"§ePause expansion","§7Queued block placement continues");
+        }
+        writer.icon(inv,49,Material.BARRIER,"§cClose menu");
+        player.openInventory(inv);
+    }
+    public void mainMenuAction(Player player,int slot) {
+        switch(slot) {
+            case 20 -> plugin.getBookWritingManager().open(player);
+            case 22 -> plugin.getBookWritingManager().searchDialog(player);
+            case 24 -> openStats(player);
+            case 30 -> { player.teleport(plugin.getGenerationEngine().homeLocation()); player.closeInventory(); }
+            case 32 -> openLecternBookEditor(player);
+            case 34 -> openBookshelfReturn(player,null);
+            case 40 -> { boolean given=plugin.getBookStorageManager().giveDailyWritableBook(player); player.sendMessage(given?"Book & quill added to your inventory.":"Unable to claim: check your daily limit and inventory space."); openMainMenu(player); }
+            case 46 -> { if(player.hasPermission("infinitylibrary.admin")) openRoomEditor(player); }
+            case 48 -> { if(player.hasPermission("infinitylibrary.admin")) { var engine=plugin.getGenerationEngine(); engine.setPaused(!engine.isPaused()); openMainMenu(player); } }
+            case 49 -> player.closeInventory();
+        }
+    }
+
     public void openStats(Player player) {
         int size = plugin.getConfig().getInt("gui.size", 27);
         Inventory inv = Bukkit.createInventory(null, size, statsTitle());
@@ -29,6 +66,7 @@ public class GUIManager {
         inv.setItem(plugin.getConfig().getInt("gui.total-books-slot", 11), item(material("gui.total-books-material", Material.WRITTEN_BOOK), "&dTotal Books", List.of("&7Stored written books: &f" + plugin.getBookStorageManager().totalBooks())));
         inv.setItem(plugin.getConfig().getInt("gui.contributors-slot", 13), item(material("gui.contributors-material", Material.PLAYER_HEAD), "&bContributors", List.of("&7Unique contributors: &f" + plugin.getBookStorageManager().totalContributors())));
         inv.setItem(plugin.getConfig().getInt("gui.player-stats-slot", 15), item(material("gui.player-stats-material", Material.BOOK), "&aYour Stats", List.of("&7Books contributed: &f" + plugin.getBookStorageManager().playerCount(player.getUniqueId()))));
+        inv.setItem(22,item(Material.ARROW,"&eMain menu",List.of()));
         player.openInventory(inv);
     }
 

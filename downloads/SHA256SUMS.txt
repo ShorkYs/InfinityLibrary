@@ -1,2 +1,4 @@
 bcfacd3f7ab1e24b63d34de9d5e7569e10fa52c4d2c20103f06f66a19b13b60e  InfinityLibrary-2.0.0-source.zip
+bd78f2a1c5f9d1559e09017d273d9eac6fd3f5c637cf4015942a635e9d58dc7b  InfinityLibrary-2.1.0-source.zip
 3c66584b1066baf0b1fd0cde51041c6f11dd7ffeb27b22192c3fb67cf6e9506d  InfinityLibraryPlugin-2.0.0.jar
+79a19f94e47393de2a117284379b4ea25f3b15b5a87bc436858071e4b13c438c  InfinityLibraryPlugin-2.1.0.jar

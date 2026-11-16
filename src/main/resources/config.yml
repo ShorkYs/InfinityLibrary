@@ -12,6 +12,12 @@ generation:
   max-total-rooms: 0
   placement-blocks-per-tick: 1800
   retry-room-selection: 16
+  planning:
+    # Search sibling layouts before placing a room. Values are bounded internally.
+    beam-width: 12
+    candidates-per-door: 12
+    max-doors: 16
+    world-block-budget: 150000
   start-room-id: "builtin_start"
   sign-min-rooms: 6
   path-blocking:

@@ -1,6 +1,7 @@
 package com.infinitylibrary.listener;
 
 import com.infinitylibrary.InfinityLibraryPlugin;
+import com.infinitylibrary.gui.LibraryMenu;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -16,8 +17,26 @@ public class GUIListener implements Listener {
     private final InfinityLibraryPlugin plugin;
     public GUIListener(InfinityLibraryPlugin plugin) { this.plugin = plugin; }
     @EventHandler public void onClick(InventoryClickEvent e) {
+        if(e.getView().getTopInventory().getHolder() instanceof LibraryMenu menu) {
+            e.setCancelled(true);
+            if(!(e.getWhoClicked() instanceof Player p) || !menu.owner().equals(p.getUniqueId()) || e.getRawSlot()<0 || e.getRawSlot()>=menu.getInventory().getSize()) return;
+            if(e.getClick()!=ClickType.LEFT && e.getClick()!=ClickType.RIGHT) return;
+            int slot=e.getRawSlot();
+            plugin.getServer().getScheduler().runTask(plugin,() -> {
+                if(!p.isOnline() || !p.hasPermission("infinitylibrary.command") || p.getOpenInventory().getTopInventory().getHolder()!=menu) return;
+                try {
+                    if(menu.screen()==LibraryMenu.Screen.MAIN) plugin.getGuiManager().mainMenuAction(p,slot);
+                    else plugin.getBookWritingManager().handle(p,menu.screen(),slot);
+                } catch(RuntimeException ex) { p.sendMessage(ChatColor.RED+ex.getMessage()); }
+            });
+            return;
+        }
         String title = e.getView().getTitle();
-        if (title.equals(plugin.getGuiManager().statsTitle())) { e.setCancelled(true); return; }
+        if (title.equals(plugin.getGuiManager().statsTitle())) {
+            e.setCancelled(true);
+            if(e.getRawSlot()==22 && e.getWhoClicked() instanceof Player p) plugin.getServer().getScheduler().runTask(plugin,() -> plugin.getGuiManager().openMainMenu(p));
+            return;
+        }
         if (title.equals(plugin.getGuiManager().roomEditorTitle())) {
             e.setCancelled(true);
             if (!(e.getWhoClicked() instanceof Player player) || !player.hasPermission("infinitylibrary.admin") || e.getRawSlot() < 0 || e.getRawSlot() >= e.getView().getTopInventory().getSize()) return;
@@ -150,6 +169,7 @@ public class GUIListener implements Listener {
     }
 
     @EventHandler public void onDrag(InventoryDragEvent e) {
+        if(e.getView().getTopInventory().getHolder() instanceof LibraryMenu) { e.setCancelled(true); return; }
         String title = e.getView().getTitle();
         if (title.equals(plugin.getGuiManager().statsTitle()) || title.equals(plugin.getGuiManager().roomEditorTitle()) || title.equals(plugin.getGuiManager().roomDetailsTitle()) || title.equals(plugin.getGuiManager().lecternTitle())) {
             if (e.getRawSlots().stream().anyMatch(slot -> slot < e.getView().getTopInventory().getSize())) e.setCancelled(true);

@@ -1,41 +1,48 @@
-# Verification — 2026-11-16
+# Version 2.1.0 verification — 2026-11-16
 
-Target: Paper Minecraft 26.3 build 253 (`63e41db`), API `26.3.build.253-stable`.
-Runtime: Eclipse Temurin Java 25.0.5; build: Gradle 9.2.1.
+Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
-## Completed
+## Build and unit tests
 
-- Compilation against the actual 26.3 API and JAR packaging: passed.
-- Three JUnit geometry tests: passed, zero failures.
-  - Every transform maps a non-square 7×3×9 room bijectively into its transformed bounds.
-  - Connections retain matching dimensions and opposite directions under each transform.
-  - Unsupported connection directions and zero width are rejected.
-- Live Paper 26.3 startup/shutdown: plugin 2.0.0 enabled and disabled successfully.
-- Console checks: status, pause, resume, room details, reload, reset confirmation guard.
-- Eight live integration assertions on a disposable server: passed.
-  - Starting room finishes queued construction.
-  - Home location provides empty standing space.
-  - A compatible book room attaches to the starting room.
-  - Manual room placement stays queued.
-  - Reload recovers unfinished room placement with the same placed-room count.
-  - Pause persists through reload.
-  - Recovered construction completes.
-  - Plugin YAML backup ZIP is created.
+Compilation, JAR packaging and **13 JUnit tests** passed with zero failures:
 
-The verification-only companion plugin source is in `verification/`. It was compiled
-against the release JAR and Paper dependencies, installed only on the disposable test
-server, and removed from deliverables intended for production installation. **Do not
-install the probe on a real server:** it resets the library and shuts down its test server.
+- 3 geometry tests: transformed bounds/bijection, matching connectors, invalid connectors.
+- 5 layout-planner tests: retain alternatives to fit both sibling doors, reservations,
+  terrain/cap rejection, score with sibling obstacles, open-versus-blocked lookahead,
+  and avoid repeated terrain checks on each beam branch.
+- 5 manuscript tests: write/insert/navigate/delete pages, retain one editable page,
+  enforce page limits, preserve text after invalid input, require title/content for
+  publication, and reject invalid metadata without partially changing details.
 
-External Minecraft authentication/discovery requests failed in this environment;
-local offline server tests still completed. No multiplayer client was connected.
-No claims are made about full multiplayer UI/book interaction coverage, load capacity,
-complete world-data migration, or third-party plugin compatibility.
+## Disposable Paper integration server
 
-## Recommended in-game acceptance check
+**33 assertions passed** against the actual 26.3 server/API, covering:
 
-On a copy of your server, join as both an operator and an ordinary player. Walk through
-new doorways, save a custom room with connections, test home, submit and return books,
-search public/private titles with two accounts, check daily draft behavior with a full
-inventory, and disconnect during a book edit. Restart during a slow room placement and
-verify recovery. Measure tick times with your expected room sizes and player count.
+- Starting-room construction, safe home and planner-driven room attachment.
+- Multiple sibling reservations before placement; reservations restored after reload
+  and a later process start; unfinished queued construction recovery; pause persistence.
+- Plugin data backup creation.
+- Main menu and writing desk construction, expected controls, administrator visibility,
+  holder/owner protections, shift-click/hotbar/drag cancellation and next-tick page actions.
+- Manuscript details and multiline pages saved to disk and reloaded.
+- Native multiline, book-details and search dialog construction through Paper's API.
+- Preview page preservation and private-book ownership.
+- Signing with player authorship, blank-book consumption, publishing and collection reload.
+- Injected collection-write failure: publication rolls back and does not consume payment.
+- Refusal to consume a book & quill containing existing text.
+
+The companion plugin source is in `verification/`. It runs only on a **disposable test
+server**: it resets the library and shuts down the server. Do not install it in production.
+Its player/inventory protocol is simulated with Java proxies while the Paper world,
+inventories, item metadata, dialogs and persistence use the actual server/API.
+
+## Scope and remaining manual verification
+
+No Minecraft client was connected. These checks do not prove visual appearance,
+client dialog input/response routing, multiplayer inventory synchronization, accessibility,
+or compatibility with other plugins. Test the real UI with a 26.3 client and two accounts
+before using it on a valuable world. Also test with your custom templates and player load.
+The bounded planner does not guarantee a globally optimal or entirely connected layout.
+
+Minecraft authentication/discovery requests were unavailable in this environment; local
+server tests ran in offline mode on loopback. Production server settings are not included.

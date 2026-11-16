@@ -86,12 +86,30 @@ public class BookStorageManager {
         saveTask = Bukkit.getScheduler().runTaskLater(plugin, () -> { saveTask = -1; saveNow(); }, 40L).getTaskId();
     }
     public synchronized void saveNow() {
-        YamlConfiguration y = new YamlConfiguration();
-        ConfigurationSection root = y.createSection("books");
-        for (StoredBook b : books.values()) b.write(root.createSection(b.id().toString()));
-        ConfigurationSection shelfRoot = y.createSection("shelf-categories");
-        for (var e : shelfCategories.entrySet()) shelfRoot.set(e.getKey(), e.getValue());
-        try { y.save(file); if (daily != null) daily.save(dailyFile); } catch (IOException e) { plugin.getLogger().severe("Unable to save book data: " + e.getMessage()); }
+        try { persistBookCollection(); if(daily!=null) daily.save(dailyFile); }
+        catch(RuntimeException | IOException e) { plugin.getLogger().severe("Unable to save book data: "+e.getMessage()); }
+    }
+
+    /** Acknowledge publication only after the searchable collection is safely on disk. */
+    public void publishManuscript(Player player,ItemStack stack) {
+        Map<UUID,StoredBook> previous=new HashMap<>(books);
+        try {
+            recordBook(player,stack,null);
+            persistBookCollection();
+        } catch(RuntimeException ex) { books.clear(); books.putAll(previous); throw ex; }
+    }
+    private void persistBookCollection() {
+        YamlConfiguration y=new YamlConfiguration();
+        ConfigurationSection root=y.createSection("books");
+        for(StoredBook b:books.values()) b.write(root.createSection(b.id().toString()));
+        ConfigurationSection shelfRoot=y.createSection("shelf-categories");
+        for(var e:shelfCategories.entrySet()) shelfRoot.set(e.getKey(),e.getValue());
+        java.nio.file.Path target=file.toPath(),temp=target.resolveSibling("books.yml.tmp");
+        try {
+            java.nio.file.Files.writeString(temp,y.saveToString());
+            try { java.nio.file.Files.move(temp,target,java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE); }
+            catch(java.nio.file.AtomicMoveNotSupportedException e) { java.nio.file.Files.move(temp,target,java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+        } catch(IOException e) { throw new IllegalStateException("Book could not be saved. Your book & quill was not consumed.",e); }
     }
 
     public boolean giveDailyWritableBook(Player player) {
@@ -185,7 +203,7 @@ public class BookStorageManager {
         if (!meta.getPersistentDataContainer().has(ownerUuidKey, PersistentDataType.STRING)) tagLibraryBook(meta, player, false);
         saved.setItemMeta(meta);
         applyAverageRatingLore(saved);
-        Location shelfLocation = placeInNearbyBookshelf(player, saved);
+        Location shelfLocation = player.getWorld().getName().equals(plugin.getConfig().getString("world","InfinityLibrary")) ? placeInNearbyBookshelf(player, saved) : null;
         recordBook(player, saved, shelfLocation);
         return shelfLocation != null;
     }

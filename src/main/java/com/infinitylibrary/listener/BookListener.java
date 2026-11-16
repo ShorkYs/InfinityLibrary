@@ -57,7 +57,7 @@ public class BookListener implements Listener {
                 e.setCancelled(true);
                 return;
             }
-            if (e.getClickedBlock().getType() == Material.LECTERN) { plugin.getGuiManager().openLectern(e.getPlayer()); e.setCancelled(true); return; }
+            if (e.getClickedBlock().getType() == Material.LECTERN) { plugin.getGuiManager().openMainMenu(e.getPlayer()); e.setCancelled(true); return; }
             if (e.getClickedBlock().getType() == Material.CHISELED_BOOKSHELF) {
                 ItemStack item = e.getItem();
                 if (item != null && item.getType() == Material.WRITTEN_BOOK) {
@@ -147,6 +147,7 @@ public class BookListener implements Listener {
 
     @EventHandler public void onSneak(PlayerToggleSneakEvent e) { if (e.isSneaking()) clearReadingIndicator(e.getPlayer()); }
     public void cleanup(Player player) {
+        plugin.getBookWritingManager().invalidate(player);
         clearReadingIndicator(player);
         java.util.UUID seat = seats.remove(player.getUniqueId());
         if (seat != null) { org.bukkit.entity.Entity entity = Bukkit.getEntity(seat); if (entity != null) entity.remove(); }

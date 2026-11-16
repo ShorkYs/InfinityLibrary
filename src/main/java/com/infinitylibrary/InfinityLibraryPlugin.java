@@ -13,6 +13,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class InfinityLibraryPlugin extends JavaPlugin {
+    private com.infinitylibrary.writing.BookWritingManager bookWritingManager;
     private BookListener bookListener;
     private RoomManager roomManager;
     private GenerationEngine generationEngine;
@@ -25,6 +26,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         roomManager = new RoomManager(this); roomManager.load();
         bookStorageManager = new BookStorageManager(this); bookStorageManager.load();
         selectionManager = new SelectionManager(this);
+        bookWritingManager = new com.infinitylibrary.writing.BookWritingManager(this); bookWritingManager.load();
         guiManager = new GUIManager(this);
         generationEngine = new GenerationEngine(this, roomManager); generationEngine.start();
         CommandHandler handler = new CommandHandler(this);
@@ -38,6 +40,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     }
 
     @Override public void onDisable() {
+        if (bookWritingManager != null) try { bookWritingManager.save(); } catch(RuntimeException ex) { getLogger().severe(ex.getMessage()); }
         if (bookListener != null) bookListener.cleanupAll();
         if (generationEngine != null) generationEngine.stop();
         if (bookStorageManager != null) bookStorageManager.saveNow();
@@ -52,6 +55,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         generationEngine.start();
     }
 
+    public com.infinitylibrary.writing.BookWritingManager getBookWritingManager() { return bookWritingManager; }
     public RoomManager getRoomManager() { return roomManager; }
     public GenerationEngine getGenerationEngine() { return generationEngine; }
     public BookStorageManager getBookStorageManager() { return bookStorageManager; }
