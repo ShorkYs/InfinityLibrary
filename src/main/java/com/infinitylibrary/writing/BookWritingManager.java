@@ -131,6 +131,10 @@ public final class BookWritingManager {
     }
     private void finish(Player p,boolean publish) {
         BookDraft d=draft(p.getUniqueId()); ItemStack result=book(p,d,true);
+        deliver(p,result,publish);plugin.getGuiManager().openMainMenu(p);
+    }
+    /** Shared books use the same durable publication/payment checks as personal manuscripts. */
+    public void deliver(Player p,ItemStack result,boolean publish) {
         int payment=-1;
         for(int i=0;i<p.getInventory().getStorageContents().length;i++) {
             ItemStack item=p.getInventory().getItem(i);
@@ -146,7 +150,6 @@ public final class BookWritingManager {
         if(publish) plugin.getBookStorageManager().publishManuscript(p,result);
         if(blank.getAmount()==1) p.getInventory().setItem(payment,null); else blank.setAmount(blank.getAmount()-1);
         if(!publish) plugin.getBookStorageManager().returnItem(p,result);
-        plugin.getGuiManager().openMainMenu(p);
         p.sendMessage(Component.text(publish?"Book published. Your manuscript is still saved.":"Signed copy added to your inventory. Your manuscript is still saved."));
     }
     public void pageDialog(Player p) {

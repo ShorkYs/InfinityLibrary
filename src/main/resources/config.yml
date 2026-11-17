@@ -59,3 +59,18 @@ props:
   packing-attempts: 8
   # Per-area collision/support cell checks, shared across attempts; capped at 1,000,000.
   cell-check-budget: 200000
+
+community:
+  max-shared-drafts-per-owner: 10
+  notice-max-days: 30
+  notice-limit: 200
+navigation:
+  max-active-routes: 32
+  max-graph-rooms: 5000
+  nodes-per-tick: 600
+  max-search-nodes: 10000
+  segment-range: 96
+preview:
+  max-volume: 32768
+  duration-seconds: 90
+  max-distance: 80

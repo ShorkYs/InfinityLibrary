@@ -28,6 +28,11 @@ public class GUIListener implements Listener {
                     if(menu.screen()==LibraryMenu.Screen.MAIN) plugin.getGuiManager().mainMenuAction(p,slot);
                     else if(java.util.Set.of(LibraryMenu.Screen.ROOMS,LibraryMenu.Screen.ROOM_DETAILS,LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS).contains(menu.screen())) plugin.getGuiManager().roomMenuAction(p,menu,slot,e.getClick()==ClickType.SHIFT_RIGHT);
                     else if(menu.screen()==LibraryMenu.Screen.PROPS) plugin.getPropManager().menuAction(p,slot);
+                    else if(menu.screen()==LibraryMenu.Screen.NOTICEBOARD)plugin.getNoticeboardManager().handle(p,menu,slot);
+                    else if(menu.screen()==LibraryMenu.Screen.READ_CATALOG||menu.screen()==LibraryMenu.Screen.READING_HISTORY)plugin.getReadingManager().handle(p,menu,slot,e.getClick()==ClickType.RIGHT);
+                    else if(menu.screen()==LibraryMenu.Screen.NAVIGATION||menu.screen()==LibraryMenu.Screen.NAV_ROOMS)plugin.getNavigationManager().handle(p,menu,slot,e.getClick()==ClickType.RIGHT);
+                    else if(menu.screen()==LibraryMenu.Screen.PREVIEW)plugin.getPreviewManager().handle(p,slot);
+                    else if(java.util.Set.of(LibraryMenu.Screen.COLLAB_LIST,LibraryMenu.Screen.COLLAB_EDIT,LibraryMenu.Screen.COLLAB_PUBLISH).contains(menu.screen()))plugin.getCollaborationManager().handle(p,menu,slot);
                     else plugin.getBookWritingManager().handle(p,menu.screen(),slot);
                 } catch(RuntimeException ex) { p.sendMessage(ChatColor.RED+ex.getMessage()); }
             });
@@ -173,6 +178,7 @@ public class GUIListener implements Listener {
         });
     }
 
+    @EventHandler public void onOpen(org.bukkit.event.inventory.InventoryOpenEvent event){if(event.getPlayer() instanceof Player p&&event.getInventory().getHolder() instanceof LibraryMenu){plugin.getManagedDialogs().invalidate(p);plugin.getBookWritingManager().invalidate(p);}}
     @EventHandler public void onClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
         if (e.getView().getTitle().equals(plugin.getGuiManager().lecternBookEditorTitle())) {

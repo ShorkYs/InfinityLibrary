@@ -1,14 +1,32 @@
-# Infinity Library 2.5.1
+# Infinity Library 2.6
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.5.1.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.5.1-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.6.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.6.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Community tools and particle navigation (new in 2.6)
+
+Five additions are available through the main chest menu:
+
+- **Room preview:** client-only room blocks with rotation, mirroring, prop/Diversity rerolls,
+  explicit variant selection and colored area/door markers. Admins use `/il preview <roomId>`.
+- **Community noticeboard:** expiring announcements/events, administrator pins, author/admin
+  removal and recent public books. `/il noticeboard bind` attaches it to a physical block.
+- **Reading progress:** a native library reader remembers pages and completion per player.
+  Use **Continue reading**, `/il reading` or `/il readheld`. Vanilla book previews are separate.
+- **Collaborative books:** durable shared manuscripts, invited UUID-based editors, owner-only
+  publishing and revision checks that reject simultaneous stale edits. `/il collaborate`.
+- **Particle pathfinding:** room-door waypoints plus incremental walkable A* trails to the
+  entrance, generated rooms, bookshelves and personal bookmarks. `/il navigate`.
+
+**[Community tools guide](COMMUNITY.md)** explains menus, permissions, commands, persistence,
+configuration and practical limits. Existing worlds and data remain usable; no reset required.
 
 ## Shared doorway planes (2.5.1)
 
@@ -169,7 +187,7 @@ The generator no longer selects and places the first room that fits a single doo
 - It **reserves the chosen neighbor volumes before placing blocks**. Walking toward a
   doorway commits that reservation; the new room's outgoing-door plans are also reserved
   before its first block is placed.
-- Exact adjacent matching exits can join an already placed room, closing a loop.
+- Matching exits on the same doorway plane can join an already placed room, closing a loop.
 - Reservations, unfinished placement and pause state persist in `generated.yml`.
   Terrain is rechecked before committing a reservation. Invalidated plans can be retried.
 - A failed bounded search leaves a doorway available for a later attempt rather than
@@ -274,7 +292,7 @@ plugin; they are not DRM against server administrators or other plugins.
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.5.1.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.6.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, planning, manuscripts, room catalogs, exact decoration

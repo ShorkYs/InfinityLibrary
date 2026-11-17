@@ -121,3 +121,9 @@ A variation door can be the room's entrance. Only selected doors participate in 
 loop connections, expansion and dead-end sealing. Rotations/reflections apply to both blocks
 and doors. Built instances and queued recovery retain their saved door snapshots even if
 someone later edits the template. Definition changes affect future instances only.
+
+## Builder preview and player navigation (2.6)
+
+`/il preview <roomId>` renders a temporary client-only view with transform and Diversity
+controls. `/il navigate` follows actually connected completed rooms and safe walking cells.
+See [COMMUNITY.md](COMMUNITY.md) for usage and configuration.

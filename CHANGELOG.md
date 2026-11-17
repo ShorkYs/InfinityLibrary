@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.6.0
+
+- Added admin client-only room previews with rotation/mirror controls, legacy variations,
+  prop/Diversity rerolls, variant selection, markers, bounded updates and live-view restoration.
+- Added community notices with expiry, pins, author/admin removal, persistent cooldowns,
+  optional physical block bindings and a recent-public-books feed.
+- Added a managed native book reader with per-player page/completion persistence, catalog,
+  history, held-book reading, stable collection IDs, contributor credits and privacy checks.
+- Added shared manuscripts with editor invitations, immutable revision-checked edits,
+  independent page cursors, owner-only publication, durable saves and coauthor credits.
+- Replaced straight shelf rays with bounded incremental A* walking trails over connected
+  completed-room door waypoints; supports shared/legacy doors, safe floor/head checks,
+  step/drop/climb movement, room browsing, bookshelf destinations and private bookmarks.
+- Added main-menu entries, room-details preview, commands, posting permission, cleanup on
+  world change/logout/reload/shutdown, atomic data replacement and transactional reloads.
+
 ## 2.5.1
 
 - Align new connection anchors/openings at identical coordinates, sharing a wall plane.

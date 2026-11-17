@@ -134,6 +134,7 @@ public class BookStorageManager {
         String fp = fingerprint(meta);
         Optional<StoredBook> existing = books.values().stream().filter(b -> b.ownerUuid().equals(ownership.ownerUuid()) && fp.equals(fingerprint((BookMeta) Objects.requireNonNull(b.toItemStack().getItemMeta())))).findFirst();
         UUID id = existing.map(StoredBook::id).orElseGet(UUID::randomUUID);
+        pdc.set(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING,id.toString());
         pdc.set(ownerUuidKey, PersistentDataType.STRING, ownership.ownerUuid());
         pdc.set(ownerNameKey, PersistentDataType.STRING, ownership.ownerName());
         pdc.set(publicKey, PersistentDataType.BYTE, (byte)(ownership.isPublic() ? 1 : 0));
@@ -450,9 +451,9 @@ public class BookStorageManager {
             .filter(b -> (b.title()+" "+b.author()+" "+b.category()+" "+b.tags()).toLowerCase(Locale.ROOT).contains(needle))
             .sorted(Comparator.comparing(StoredBook::title).thenComparing(b -> b.id().toString())).toList();
         player.sendMessage(ChatColor.LIGHT_PURPLE + "Found " + results.size() + " book(s). Showing up to 10:");
-        results.stream().limit(10).forEach(b -> player.sendMessage(ChatColor.GRAY + b.title() + " by " + b.author() + " [" + b.category() + "]"));
+        results.stream().limit(10).forEach(b -> player.sendMessage(net.kyori.adventure.text.Component.text(b.title()+" by "+b.author()+" ["+b.category()+"] — click to read").clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/il read "+b.id()))));
         results.stream().map(b -> deserializeLocation(b.shelfLocation())).filter(Objects::nonNull)
-            .filter(l -> player.getWorld().equals(l.getWorld())).findFirst().ifPresent(l -> traceParticles(player,l));
+            .filter(l -> player.getWorld().equals(l.getWorld())).findFirst().ifPresent(l -> {try{plugin.getNavigationManager().start(player,"search result bookshelf",l);}catch(IllegalArgumentException ex){player.sendMessage(ex.getMessage());}});
     }
 
     public boolean handleMetadataChat(Player player, String input) {
@@ -514,24 +515,6 @@ public class BookStorageManager {
         player.getInventory().setItemInMainHand(editable);
     }
 
-    private void traceParticles(Player player, Location target) {
-        int task = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, new Runnable() {
-            int ticks;
-            @Override public void run() {
-                Location from = player.getEyeLocation();
-                World world = from.getWorld();
-                if (world == null || !world.equals(target.getWorld()) || ticks++ > 200) return;
-                for (double t = 0; t <= 1.0; t += 0.08) {
-                    double x = from.getX() + (target.getX() + 0.5 - from.getX()) * t;
-                    double y = from.getY() + (target.getY() + 0.5 - from.getY()) * t;
-                    double z = from.getZ() + (target.getZ() + 0.5 - from.getZ()) * t;
-                    player.spawnParticle(Particle.END_ROD, x, y, z, 1, 0, 0, 0, 0);
-                }
-            }
-        }, 0L, 10L);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> Bukkit.getScheduler().cancelTask(task), 205L);
-    }
-
     private void markBookLocation(ItemStack item, Location location) {
         for (StoredBook book : books.values()) {
             if (book.toItemStack().isSimilar(item)) {
@@ -574,6 +557,7 @@ public class BookStorageManager {
     }
 
     private String serializeLocation(Location location) { return location == null || location.getWorld() == null ? "" : location.getWorld().getName() + ";" + location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ(); }
+    public Location bookLocation(StoredBook book){return deserializeLocation(book.shelfLocation());}
     private Location deserializeLocation(String value) {
         try { String[] p = value.split(";"); World w = Bukkit.getWorld(p[0]); return w == null ? null : new Location(w, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])); }
         catch (Exception ex) { return null; }

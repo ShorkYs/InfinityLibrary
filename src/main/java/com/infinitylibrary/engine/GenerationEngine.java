@@ -333,7 +333,7 @@ public class GenerationEngine {
         placementQueue.add(() -> { pending.remove(origin.toString()); save(); });
     }
 
-    private void rotateData(BlockData data, RoomTransform transform) {
+    public void rotateData(BlockData data, RoomTransform transform) {
         if (transform.flipX()) data.mirror(org.bukkit.block.structure.Mirror.FRONT_BACK);
         if (transform.flipZ()) data.mirror(org.bukkit.block.structure.Mirror.LEFT_RIGHT);
         data.rotate(switch (transform.rotation()) {
@@ -509,6 +509,13 @@ public class GenerationEngine {
 
     public boolean roomLimitReached() { int limit = plugin.getConfig().getInt("generation.max-total-rooms", 0); return limit > 0 && placed.size() >= limit; }
     public void replanFutureRooms() { lastPlanningNote="";reservations.clear();lastPlanAttempt.clear();reopenDeadEnds();save(); }
+    /** Immutable navigation snapshots; only completed rooms and actually connected, open doorways. */
+    public UUID libraryId(){return placed.isEmpty()?null:placed.getFirst().instanceId();}
+    public List<com.infinitylibrary.community.RoomGraph.RoomNode> navigationRooms(){
+        List<com.infinitylibrary.community.RoomGraph.RoomNode> result=new ArrayList<>();
+        for(PlacedRoom pr:placed)if(!pending.contains(pr.origin().toString()))roomManager.get(pr.roomId()).ifPresent(room -> result.add(new com.infinitylibrary.community.RoomGraph.RoomNode(pr.instanceId(),pr.roomId(),room.type(),footprint(pr),pr.connections(room).stream().filter(cp -> pr.generatedConnections().contains(cp.id())&&!pr.closedConnections().containsKey(cp.id())).map(cp -> worldDoor(pr,room,cp)).toList())));
+        return List.copyOf(result);
+    }
     public int plannedCount() { return reservations.size(); }
     public int placedCount() { return placed.size(); }
     public int queuedBlocks() { return placementQueue.size(); }

@@ -16,6 +16,12 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     private com.infinitylibrary.writing.BookWritingManager bookWritingManager;
     private com.infinitylibrary.props.PropManager propManager;
     private com.infinitylibrary.diversity.DiversityManager diversityManager;
+    private com.infinitylibrary.community.ManagedDialogs managedDialogs;
+    private com.infinitylibrary.community.CollaborationManager collaborationManager;
+    private com.infinitylibrary.community.ReadingManager readingManager;
+    private com.infinitylibrary.community.NoticeboardManager noticeboardManager;
+    private com.infinitylibrary.community.NavigationManager navigationManager;
+    private com.infinitylibrary.community.PreviewManager previewManager;
     private BookListener bookListener;
     private RoomManager roomManager;
     private GenerationEngine generationEngine;
@@ -33,6 +39,12 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         bookWritingManager = new com.infinitylibrary.writing.BookWritingManager(this); bookWritingManager.load();
         guiManager = new GUIManager(this);
         generationEngine = new GenerationEngine(this, roomManager); generationEngine.start();
+        managedDialogs=new com.infinitylibrary.community.ManagedDialogs(this);
+        collaborationManager=new com.infinitylibrary.community.CollaborationManager(this);
+        readingManager=new com.infinitylibrary.community.ReadingManager(this);
+        noticeboardManager=new com.infinitylibrary.community.NoticeboardManager(this);
+        navigationManager=new com.infinitylibrary.community.NavigationManager(this);
+        previewManager=new com.infinitylibrary.community.PreviewManager(this);
         CommandHandler handler = new CommandHandler(this);
         PluginCommand command = getCommand("infinitylibrary");
         if (command != null) { command.setExecutor(handler); command.setTabCompleter(handler); }
@@ -44,6 +56,9 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     }
 
     @Override public void onDisable() {
+        if(previewManager!=null)previewManager.shutdown();
+        if(navigationManager!=null)navigationManager.shutdown();
+        if(managedDialogs!=null)managedDialogs.clear();
         if (bookWritingManager != null) try { bookWritingManager.save(); } catch(RuntimeException ex) { getLogger().severe(ex.getMessage()); }
         if (bookListener != null) bookListener.cleanupAll();
         if (generationEngine != null) generationEngine.stop();
@@ -51,6 +66,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     }
 
     public void reloadEverything() {
+        previewManager.clear();navigationManager.clearRoutes();managedDialogs.clear();
         generationEngine.stop();
         bookStorageManager.saveNow();
         reloadConfig();
@@ -58,8 +74,15 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         roomManager.load();
         bookStorageManager.load();
         generationEngine.start();
+        collaborationManager.load();readingManager.load();noticeboardManager.load();navigationManager.load();
     }
 
+    public com.infinitylibrary.community.ManagedDialogs getManagedDialogs(){return managedDialogs;}
+    public com.infinitylibrary.community.CollaborationManager getCollaborationManager(){return collaborationManager;}
+    public com.infinitylibrary.community.ReadingManager getReadingManager(){return readingManager;}
+    public com.infinitylibrary.community.NoticeboardManager getNoticeboardManager(){return noticeboardManager;}
+    public com.infinitylibrary.community.NavigationManager getNavigationManager(){return navigationManager;}
+    public com.infinitylibrary.community.PreviewManager getPreviewManager(){return previewManager;}
     public com.infinitylibrary.writing.BookWritingManager getBookWritingManager() { return bookWritingManager; }
     public com.infinitylibrary.props.PropManager getPropManager() { return propManager; }
     public com.infinitylibrary.diversity.DiversityManager getDiversityManager() {return diversityManager;}

@@ -23,12 +23,17 @@ public class GUIManager {
 
     public void openMainMenu(Player player) {
         if (!player.hasPermission("infinitylibrary.command")) throw new IllegalArgumentException("Missing permission infinitylibrary.command");
-        plugin.getBookWritingManager().invalidate(player);
+        plugin.getBookWritingManager().invalidate(player);plugin.getManagedDialogs().invalidate(player);
         LibraryMenu menu = new LibraryMenu(player, LibraryMenu.Screen.MAIN, 54, "Infinity Library • Main Menu");
         Inventory inv=menu.getInventory();
         for(int i=0;i<54;i++) inv.setItem(i,item(Material.BLACK_STAINED_GLASS_PANE," ",List.of()));
         var writer=plugin.getBookWritingManager();
         writer.icon(inv,4,Material.ENCHANTED_BOOK,"§dInfinity Library","§7Books: "+plugin.getBookStorageManager().totalBooks(),"§7Rooms: "+plugin.getGenerationEngine().placedCount()+" · Planned: "+plugin.getGenerationEngine().plannedCount());
+        writer.icon(inv,10,Material.OAK_SIGN,"§eCommunity noticeboard","§7Announcements, events and recent public books");
+        writer.icon(inv,12,Material.BOOK,"§bBook collection","§7Read books with saved page progress");
+        writer.icon(inv,14,Material.CLOCK,"§aContinue reading","§7Your saved pages and finished books");
+        writer.icon(inv,16,Material.MAP,"§bParticle navigation","§7Walking trails and personal bookmarks");
+        writer.icon(inv,28,Material.WRITABLE_BOOK,"§dCollaborative books","§7Shared manuscripts with invited editors");
         writer.icon(inv,20,Material.WRITABLE_BOOK,"§aWriting desk","§7Write pages, set a title and preview","§7Continue your saved manuscript");
         writer.icon(inv,22,Material.COMPASS,"§bSearch books","§7Search title, author, category or tags");
         writer.icon(inv,24,Material.BOOKSHELF,"§dLibrary statistics","§7Books, contributors and your activity");
@@ -47,6 +52,11 @@ public class GUIManager {
     }
     public void mainMenuAction(Player player,int slot) {
         switch(slot) {
+            case 10 -> plugin.getNoticeboardManager().browser(player,0);
+            case 12 -> plugin.getReadingManager().browser(player,0,false);
+            case 14 -> plugin.getReadingManager().browser(player,0,true);
+            case 16 -> plugin.getNavigationManager().browser(player);
+            case 28 -> plugin.getCollaborationManager().browser(player,0);
             case 20 -> plugin.getBookWritingManager().open(player);
             case 22 -> plugin.getBookWritingManager().searchDialog(player);
             case 24 -> openStats(player);
@@ -183,6 +193,7 @@ public class GUIManager {
         LibraryMenu menu=new LibraryMenu(player,LibraryMenu.Screen.ROOM_DETAILS,27,roomDetailsTitle());menu.entry(0,roomId);Inventory inv=menu.getInventory();
         for(int i=0;i<27;i++)inv.setItem(i,item(Material.GRAY_STAINED_GLASS_PANE," ",List.of()));
         inv.setItem(4,item(Material.BOOK,"&b"+roomId,List.of("&7Type: "+room.type(),"&7Active start: "+plugin.getRoomManager().activeStartId())));
+        inv.setItem(9,item(Material.SPYGLASS,"&bPreview Room",List.of("&7Client-only blocks; the world is unchanged.","&7Rotate, mirror, reroll and inspect doors.")));
         inv.setItem(11,item(Material.WOODEN_AXE,"&eEdit Selected Area",List.of("&7Select bounds and save a new room ID.")));
         inv.setItem(13,item(Material.SLIME_BALL,"&aAdd Variations",List.of("&e/il applyvariations "+roomId)));
         inv.setItem(15,item(Material.BARRIER,"&cRemove Template",List.of("&7Built rooms keep their archived data.")));
@@ -206,6 +217,7 @@ public class GUIManager {
         } else if(menu.screen()==LibraryMenu.Screen.ROOM_DETAILS) {
             String id=menu.entry(0);
             switch(slot) {
+                case 9 -> plugin.getPreviewManager().start(p,id);
                 case 11 -> {p.closeInventory();p.sendMessage("Select bounds/exits, then save with a new room ID. Use STARTING for an entrance template.");}
                 case 13 -> p.sendMessage("/il applyvariations "+id);
                 case 15 -> {manager.delete(id);openRoomEditor(p);}

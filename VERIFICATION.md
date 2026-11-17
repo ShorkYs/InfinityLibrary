@@ -1,10 +1,10 @@
-# Version 2.5.1 verification — 2026-11-17
+# Version 2.6.0 verification — 2026-11-17
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
 ## Clean build and automated tests
 
-`build` passed with **74 JUnit tests**, zero failures:
+`clean build` and the final incremental `build` passed with **99 JUnit tests**, zero failures:
 
 - 38 retained geometry, room-planning/catalog, manuscript and prop-packing/persistence tests.
 - 7 exact-decoration tests: reject smaller entries, require category and all dimensions,
@@ -15,7 +15,37 @@ Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
   trips, overlap/door protection, malformed data and legacy reads.
 
 Fixed Gradle resource-input tracking for the plugin version. The clean release JAR's
-`plugin.yml` was inspected and reports **2.5.1**, matching the actual release filename.
+`plugin.yml` was inspected and reports **2.6.0**, matching the actual release filename.
+
+## Community, reading, preview and navigation (2.6)
+
+25 additional JUnit tests cover:
+
+- Incremental path search around walls, enclosed goals, diagonal corner rejection, work/node
+  caps, step-up headroom, ladder columns and rejecting drops through solid blocks.
+- Shared manuscript stale-edit rejection, revocation, owner-only access/publishing controls,
+  visibility ownership, retained credits, immutable state, page/member/content limits.
+- Room graph routing for shared and legacy doors, excluding unavailable exits, matching
+  dimensions/floors, same-room destinations and unreachable room types.
+- Atomic Unicode YAML persistence, refusing malformed input without replacing it, failed-write
+  preservation, notice expiry/content validation and reading page bounds.
+
+The final disposable Paper run adds 53 assertions to the previous 141-check suite. It tests
+shared-draft privacy/edits/revocation/reload, simultaneous stale edits, coauthor metadata,
+durable shared publication and payment, transactional bad-data reloads and save-failure
+rollback, native reader construction/resume/completion, private catalog/feed exclusion,
+notice permissions/pins/expiry data/cooldowns, physical board interaction, menu exposure,
+private bookmarks, unavailable shelf handling, owner-only particles, real-wall path detours,
+magma/headroom/fence rejection, route cancellation, preview permissions/client packets,
+unchanged real blocks, rotation/mirroring/live restoration, explicit Diversity preview,
+world-switch isolation and complete plugin reload cleanup/persistence.
+
+The proxy actors do not hold chunks like real players. The harness gives only its fixture
+chunks test-plugin tickets for realistic loaded terrain; production navigation and previews
+never add tickets or load chunks. Player actors are simulated; native dialogs are constructed and their backing operations
+are exercised. Real response routing, multiplayer rendering, clicks and large-server
+performance need in-game checks.
+No real Minecraft client was connected, and no production world was reset or altered.
 
 ## Shared-plane regressions (2.5.1)
 
@@ -59,7 +89,7 @@ No real client connected and the user's particular server configuration is unver
 
 ## Actual Paper server checks
 
-The final correctly labeled 2.5.1 JAR passed **141 integration assertions**, including:
+The final correctly labeled 2.6.0 JAR passed **194 integration assertions**, including:
 
 - Four-click Diversity capture with an external source, rejected dimension mismatch,
   prevention of silently saving an incomplete capture, multiple/empty alternatives,

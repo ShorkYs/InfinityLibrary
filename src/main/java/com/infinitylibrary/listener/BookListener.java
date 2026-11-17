@@ -37,6 +37,7 @@ public class BookListener implements Listener {
         if (plugin.getDiversityManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
         if (plugin.getPropManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
         if (plugin.getSelectionManager().handle(e.getPlayer(), e.getAction(), e.getClickedBlock())) { e.setCancelled(true); return; }
+        if(e.getAction()==Action.RIGHT_CLICK_BLOCK&&plugin.getNoticeboardManager().isBoard(e.getClickedBlock())){e.setCancelled(true);plugin.getNoticeboardManager().browser(e.getPlayer(),0);return;}
         if (!e.getPlayer().getWorld().getName().equals(plugin.getConfig().getString("world", "InfinityLibrary"))) return;
         if (e.getAction() == Action.LEFT_CLICK_BLOCK && e.getClickedBlock() != null && e.getClickedBlock().getType() == Material.LECTERN) {
             plugin.getGuiManager().openLecternBookEditor(e.getPlayer());
@@ -68,6 +69,10 @@ public class BookListener implements Listener {
                 }
                 return;
             }
+        }
+        ItemStack held=e.getItem();
+        if((e.getAction()==Action.RIGHT_CLICK_AIR||e.getAction()==Action.RIGHT_CLICK_BLOCK)&&held!=null&&held.getType()==Material.WRITTEN_BOOK&&held.hasItemMeta()&&held.getItemMeta().getPersistentDataContainer().has(new org.bukkit.NamespacedKey(plugin,"library_book_id"),org.bukkit.persistence.PersistentDataType.STRING)){
+            e.setCancelled(true);try{plugin.getReadingManager().openItem(e.getPlayer(),held);}catch(IllegalArgumentException ex){e.getPlayer().sendMessage(ex.getMessage());}return;
         }
         ItemStack item = e.getItem();
         if ((e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) && item != null && item.getType() == Material.WRITTEN_BOOK && !plugin.getBookStorageManager().canRead(e.getPlayer(), item)) {
@@ -104,12 +109,12 @@ public class BookListener implements Listener {
     private void openPreferredReadingBook(Player player) {
         ItemStack inventoryBook = firstReadableInventoryBook(player);
         if (inventoryBook != null) {
-            player.openBook(inventoryBook);
+            plugin.getReadingManager().openItem(player,inventoryBook);
             showReadingIndicator(player);
             return;
         }
         plugin.getBookStorageManager().allBooks().stream().filter(b -> b.isPublic() || b.ownerUuid().equals(player.getUniqueId().toString())).findAny().map(b -> b.toItemStack()).ifPresentOrElse(book -> {
-            player.openBook(book);
+            plugin.getReadingManager().openItem(player,book);
             showReadingIndicator(player);
         }, () -> player.sendMessage(ChatColor.RED + "No stored books available."));
     }
@@ -149,6 +154,8 @@ public class BookListener implements Listener {
 
     @EventHandler public void onSneak(PlayerToggleSneakEvent e) { if (e.isSneaking()) clearReadingIndicator(e.getPlayer()); }
     public void cleanup(Player player) {
+        plugin.getPreviewManager().stop(player);plugin.getNavigationManager().stop(player);
+        plugin.getManagedDialogs().invalidate(player);plugin.getReadingManager().cleanup(player);plugin.getCollaborationManager().cleanup(player);
         plugin.getDiversityManager().clear(player);
         plugin.getPropManager().endSession(player);
         plugin.getBookWritingManager().invalidate(player);
