@@ -1,5 +1,23 @@
 # Room planning, dead ends and variant doors — 2.5
 
+## Shared wall planes (2.5.1)
+
+The next room's entrance is aligned exactly with the existing exit: both anchors and every
+opening cell occupy the same coordinates. Placement, reservations, lookahead, loops and
+commit-time checks use this spacing. There is no extra outward block offset.
+
+Bounding boxes can overlap by a single boundary layer where opposing compatible doorways
+coincide. Unrelated shared faces and interior overlap are rejected. Corner pillars/edges
+between tiled rooms can be shared too. Terrain checks exclude only accepted shared shell
+cells of actual placed rooms; solid blocks elsewhere still block the candidate.
+
+The existing room owns shared wall/floor/ceiling blocks. The incoming template, Diversity
+patches and props cannot overwrite those cells. Joined door openings are explicitly cleared
+after placement so solid authoring markers do not leave an extra wall. Up/down openings
+share the same floor/ceiling plane. Existing room positions and saved connections stay
+unchanged on update. Plans written before 2.5.1 are invalidated and rebuilt using the new
+spacing; a pending placed room retains its saved origin during recovery. No reset required.
+
 ## Plan before building
 
 The planner considers every enabled template in the configured expansion pool (`/il baseroom all`
@@ -7,7 +25,7 @@ uses all eligible normal rooms; a selected base restricts that pool). It compare
 placements/rotations/reflections for each template and active Diversity door layout, plans
 siblings together, and checks every unused connection on each candidate for a continuation.
 It also checks open exits on other placed rooms. An existing exit that still has a possible continuation must remain connectable; a
-placement is deferred if the planner cannot prove that it preserves those exits. Compatible adjacent doors connect as
+placement is deferred if the planner cannot prove that it preserves those exits. Compatible doors at the same coordinates connect as
 loops instead of requiring another room. Reservations, terrain and world boundaries are
 checked before placement; saved reservations are revalidated at commitment.
 

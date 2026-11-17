@@ -32,10 +32,10 @@ public final class TopologySearch {
             List<LayoutPlanner.Candidate> found=byRoom.computeIfAbsent(room.id()+"/"+template.diversity().patches().stream().map(p -> p.areaId()+":"+p.choice()).toList(),id -> new ArrayList<>());
             for(ConnectionPoint cp:template.connections())for(RoomTransform transform:RoomTransform.all()) {
                 ConnectionPoint entrance=cp.transform(transform,room.size());if(!target.compatibleWith(entrance))continue;
-                Vector3i origin=target.position().add(step(target)).subtract(entrance.position());
+                Vector3i origin=target.position().subtract(entrance.position());
                 var c=new LayoutPlanner.Candidate(room,cp.id(),transform,origin,UUID.randomUUID(),template.diversity());
                 String signature=room.id()+"/"+origin+"/"+c.connections().stream().map(c::worldDoor).toList()+"/"+template.diversity().patches().stream().map(p -> p.areaId()+":"+p.choice()).toList();
-                if(!seen.add(signature)||obstacles.stream().anyMatch(b -> b.overlaps(c.box())))continue;
+                if(!seen.add(signature)||obstacles.stream().anyMatch(b -> b.conflicts(c.box())))continue;
                 if(found.size()>=perTemplate)continue;
                 if(clear(c.box())==Fit.YES)found.add(c);
             }
@@ -50,9 +50,9 @@ public final class TopologySearch {
         boolean unknown=!complete;
         for(Template template:templates)for(ConnectionPoint cp:template.connections())for(RoomTransform transform:RoomTransform.all()) {
             ConnectionPoint entrance=cp.transform(transform,template.room().size());if(!target.compatibleWith(entrance))continue;
-            Vector3i origin=target.position().add(step(target)).subtract(entrance.position());
-            var box=new LayoutPlanner.Box(origin,transform.transformedSize(template.room().size()));
-            if(obstacles.stream().anyMatch(b -> b.overlaps(box)))continue;
+            Vector3i origin=target.position().subtract(entrance.position());
+            var box=new LayoutPlanner.Box(origin,transform.transformedSize(template.room().size()),template.connections().stream().map(c -> c.transform(transform,template.room().size()).offset(c.id(),origin)).toList());
+            if(obstacles.stream().anyMatch(b -> b.conflicts(box)))continue;
             if(--checks<0){limited=true;unknown=true;continue;}
             Fit fit=clear(box);if(fit==Fit.YES){witnesses.put(target,box);return Fit.YES;}if(fit==Fit.UNKNOWN)unknown=true;
         }
@@ -63,11 +63,11 @@ public final class TopologySearch {
         for(var c:chosen){boxes.add(c.box());for(ConnectionPoint cp:c.connections())doors.add(c.worldDoor(cp));}
         for(ConnectionPoint cp:viable){
             LayoutPlanner.Box witness=witnesses.get(cp);
-            if(witness!=null&&chosen.stream().noneMatch(c -> c.box().overlaps(witness)))continue;
+            if(witness!=null&&chosen.stream().noneMatch(c -> c.box().conflicts(witness)))continue;
             if(continuation(cp,boxes,doors)!=Fit.YES)return false;
         }
         return true;
     }
     public static Vector3i step(ConnectionPoint cp){return new Vector3i(cp.direction().getModX(),cp.direction().getModY(),cp.direction().getModZ());}
-    public static boolean linked(ConnectionPoint a,ConnectionPoint b){return a.compatibleWith(b)&&a.position().add(step(a)).equals(b.position());}
+    public static boolean linked(ConnectionPoint a,ConnectionPoint b){return a.compatibleWith(b)&&a.position().equals(b.position());}
 }

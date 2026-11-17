@@ -1,10 +1,10 @@
-# Version 2.5.0 verification — 2026-11-16
+# Version 2.5.1 verification — 2026-11-17
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
 
 ## Clean build and automated tests
 
-`clean build` plus final incremental `build` passed with **67 JUnit tests**, zero failures:
+`build` passed with **74 JUnit tests**, zero failures:
 
 - 38 retained geometry, room-planning/catalog, manuscript and prop-packing/persistence tests.
 - 7 exact-decoration tests: reject smaller entries, require category and all dimensions,
@@ -15,7 +15,22 @@ Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.
   trips, overlap/door protection, malformed data and legacy reads.
 
 Fixed Gradle resource-input tracking for the plugin version. The clean release JAR's
-`plugin.yml` was inspected and reports **2.5.0**, matching the actual release filename.
+`plugin.yml` was inspected and reports **2.5.1**, matching the actual release filename.
+
+## Shared-plane regressions (2.5.1)
+
+Seven new JUnit tests cover all six faces and sixteen transforms, exact even-width opening
+cells, actual candidate origins with no outward offset, solid-interior collisions,
+misaligned/mismatched width/floor/direction rejection, passive corner-pillar sharing,
+rejection of one-block-apart loop anchors, and shared-face sibling planning.
+
+Fourteen new assertions on Paper test solid authored room shells: interior terrain blocks
+are rejected and preserved, door anchors and all nine aperture cells coincide, future
+reservations use the new stride, pending placement recovers without duplicate rooms,
+solid marker blocks are cleared, existing gold wall/floor/ceiling blocks survive,
+there is no extra doorway plane, old-spacing plans are invalidated without moving placed
+rooms, and a three-room shared-wall chain completes. Player protocol remains simulated;
+no real Minecraft client was connected.
 
 ## Planner, dead-end and Diversity-door tests (2.5)
 
@@ -44,7 +59,7 @@ No real client connected and the user's particular server configuration is unver
 
 ## Actual Paper server checks
 
-The final correctly labeled 2.5.0 JAR passed **127 integration assertions**, including:
+The final correctly labeled 2.5.1 JAR passed **141 integration assertions**, including:
 
 - Four-click Diversity capture with an external source, rejected dimension mismatch,
   prevention of silently saving an incomplete capture, multiple/empty alternatives,

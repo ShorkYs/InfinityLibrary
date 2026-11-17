@@ -8,7 +8,39 @@ import java.util.function.BiFunction;
 
 /** Pure bounded beam search: compare complete sibling layouts before committing blocks. */
 public final class LayoutPlanner {
-    public record Box(Vector3i origin, Vector3i size) {
+    public record Box(Vector3i origin, Vector3i size,List<ConnectionPoint> doors) {
+        public Box(Vector3i origin,Vector3i size){this(origin,size,List.of());}
+        public Box {doors=List.copyOf(doors);}
+        public boolean contains(Vector3i p){return p.x()>=origin.x()&&p.y()>=origin.y()&&p.z()>=origin.z()&&(long)p.x()< (long)origin.x()+size.x()&&(long)p.y()<(long)origin.y()+size.y()&&(long)p.z()<(long)origin.z()+size.z();}
+        /** Solid room volumes may share one boundary plane only at matching, opposing doors. */
+        public boolean conflicts(Box other){return overlaps(other)&&!sharesBoundary(other);}
+        public boolean sharesBoundary(Box other){
+            if(!overlaps(other))return false;
+            if(sharesDoorPlane(other))return true;
+            // Tiled neighboring rooms also share corner pillars/edges, which are shell only.
+            int edges=0;int[] a={origin.x(),origin.y(),origin.z()},b={other.origin.x(),other.origin.y(),other.origin.z()};
+            int[] sa={size.x(),size.y(),size.z()},sb={other.size.x(),other.size.y(),other.size.z()};
+            for(int axis=0;axis<3;axis++)if(sa[axis]>1&&sb[axis]>1&&((long)a[axis]+sa[axis]-1==b[axis]||(long)b[axis]+sb[axis]-1==a[axis]))edges++;
+            return edges>=2;
+        }
+        public boolean sharesDoorPlane(Box other){
+            if(!overlaps(other))return false;
+            int[] a={origin.x(),origin.y(),origin.z()},b={other.origin.x(),other.origin.y(),other.origin.z()};
+            int[] sa={size.x(),size.y(),size.z()},sb={other.size.x(),other.size.y(),other.size.z()};
+            for(int axis=0;axis<3;axis++){
+                if(sa[axis]<2||sb[axis]<2)continue;
+                long endA=(long)a[axis]+sa[axis]-1,endB=(long)b[axis]+sb[axis]-1;
+                int direction=endA==b[axis]?1:endB==a[axis]?-1:0;if(direction==0)continue;
+                long plane=direction==1?endA:a[axis];
+                for(ConnectionPoint door:doors){
+                    int normal=axis==0?door.direction().getModX():axis==1?door.direction().getModY():door.direction().getModZ();
+                    int at=axis==0?door.position().x():axis==1?door.position().y():door.position().z();
+                    if(normal!=direction||at!=plane)continue;
+                    for(ConnectionPoint opposite:other.doors)if(door.compatibleWith(opposite)&&door.position().equals(opposite.position())&&door.cells().stream().allMatch(p -> contains(p)&&other.contains(p)))return true;
+                }
+            }
+            return false;
+        }
         public boolean overlaps(Box other) {
             return origin.x() < (long)other.origin.x()+other.size.x() && (long)origin.x()+size.x()>other.origin.x()
                 && origin.y() < (long)other.origin.y()+other.size.y() && (long)origin.y()+size.y()>other.origin.y()
@@ -19,7 +51,7 @@ public final class LayoutPlanner {
         public Candidate(Room room,String entranceId,RoomTransform transform,Vector3i origin){this(room,entranceId,transform,origin,UUID.randomUUID());}
         private Candidate(Room room,String entranceId,RoomTransform transform,Vector3i origin,UUID instance){this(room,entranceId,transform,origin,instance,DiversityComposition.resolve(room,instance));}
         public List<ConnectionPoint> connections(){return diversity.connections(room);}
-        public Box box() { return new Box(origin, transform.transformedSize(room.size())); }
+        public Box box() { return new Box(origin, transform.transformedSize(room.size()),connections().stream().map(this::worldDoor).toList()); }
         public ConnectionPoint worldDoor(ConnectionPoint cp) {
             ConnectionPoint t = cp.transform(transform,room.size());
             return new ConnectionPoint(cp.id(),origin.add(t.position()),t.direction(),t.width(),t.height(),t.floor());
@@ -41,7 +73,7 @@ public final class LayoutPlanner {
         for (var entry : options.entrySet()) {
             List<Candidate> candidates = new ArrayList<>();
             for (Candidate c : entry.getValue()) {
-                if (occupied.stream().noneMatch(b -> b.overlaps(c.box())) && worldClear.test(c)) {
+                if (occupied.stream().noneMatch(b -> b.conflicts(c.box())) && worldClear.test(c)) {
                     candidates.add(c); scores.put(c, continuationScore.apply(c,occupied));
                 }
             }
@@ -60,7 +92,7 @@ public final class LayoutPlanner {
                 next.add(state); // A temporarily unfillable door remains open for a later attempt.
                 if (state.chosen.size() >= maxRooms) continue;
                 for (Candidate c : valid.get(door)) {
-                    if (state.boxes.stream().anyMatch(b -> b.overlaps(c.box()))) continue;
+                    if (state.boxes.stream().anyMatch(b -> b.conflicts(c.box()))) continue;
                     Map<String,Candidate> chosen = new LinkedHashMap<>(state.chosen); chosen.put(door,c);
                     List<Box> boxes = new ArrayList<>(state.boxes); boxes.add(c.box());
                     if(preservesFrontier.test(chosen.values()))next.add(new State(chosen,boxes,state.score+scores.get(c)));
@@ -101,9 +133,9 @@ public final class LayoutPlanner {
                     checks++;
                     ConnectionPoint entrance = cp.transform(transform,room.size());
                     if (!target.compatibleWith(entrance)) continue;
-                    Vector3i origin = target.position().add(new Vector3i(target.direction().getModX(),target.direction().getModY(),target.direction().getModZ())).subtract(entrance.position());
-                    Box box = new Box(origin,transform.transformedSize(room.size()));
-                    if (obstacles.stream().noneMatch(b -> b.overlaps(box))) { fits=true; break search; }
+                    Vector3i origin = target.position().subtract(entrance.position());
+                    Box box = new Box(origin,transform.transformedSize(room.size()),room.connections().stream().map(cp2 -> cp2.transform(transform,room.size()).offset(cp2.id(),origin)).toList());
+                    if (obstacles.stream().noneMatch(b -> b.conflicts(box))) { fits=true; break search; }
                 }
             }
             score += fits ? 4 : -3;

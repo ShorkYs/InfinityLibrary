@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.5.1
+
+- Align new connection anchors/openings at identical coordinates, sharing a wall plane.
+- Apply the same geometry to catalog search, lookahead, sibling reservations, loops,
+  commitment validation and queued recovery; preserve solid-interior collision checks.
+- Allow only matching boundary faces and passive tiled corner edges to share volume.
+- Preserve existing shell blocks across template, Diversity and prop writes, then clear
+  joined apertures explicitly. Supports even widths, transforms and UP/DOWN connections.
+- Invalidate old unbuilt reservations while preserving placed room origins and recovery.
+- Added seven shared-plane geometry tests and fourteen actual Paper regression assertions.
+
 ## 2.5.0
 
 - Consider every eligible catalog template, with separate alternatives per template/topology;

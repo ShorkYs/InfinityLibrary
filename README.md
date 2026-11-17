@@ -1,14 +1,25 @@
-# Infinity Library 2.5
+# Infinity Library 2.5.1
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
 **Java 25**. No client mod or resource pack is needed.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.5.0.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.5.0-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.5.1.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-2.5.1-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## Shared doorway planes (2.5.1)
+
+New rooms align their connection points at the **same block coordinates**, sharing one
+wall layer instead of placing two doorway planes next to each other. The joined opening
+is cleared, while the existing room's surrounding wall, floor and ceiling are preserved.
+Normal interior/terrain collision checks still apply. This also works with rotated,
+mirrored and Diversity doors, sibling reservations, loops and vertical connections.
+
+Existing rooms stay where they are. Older unbuilt reservations are discarded automatically
+and future rooms use the new spacing. Keep your plugin folder; no reset is needed.
 
 ## Smarter room generation and Diversity doors (new in 2.5)
 
@@ -263,7 +274,7 @@ plugin; they are not DRM against server administrators or other plugins.
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.5.0.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-2.5.1.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, planning, manuscripts, room catalogs, exact decoration

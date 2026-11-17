@@ -30,7 +30,7 @@ class TopologySearchTest {
         assertEquals(TopologySearch.Fit.UNKNOWN,limited.continuation(exit(),List.of(),List.of()));
     }
     @Test void compatibleAdjacentExitCountsAsLoopEvenWhenNoNewRoomFits(){
-        var other=new ConnectionPoint("other",new Vector3i(5,1,2),BlockFace.WEST,1,2);
+        var other=new ConnectionPoint("other",new Vector3i(4,1,2),BlockFace.WEST,1,2);
         var search=new TopologySearch(List.of(room("r",5,1)),64,200000,b -> TopologySearch.Fit.NO);
         assertEquals(TopologySearch.Fit.YES,search.continuation(exit(),List.of(),List.of(other)));
         assertEquals(TopologySearch.Fit.NO,search.continuation(exit(),List.of(),List.of(other.offset("wrong",new Vector3i(1,0,0)))));

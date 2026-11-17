@@ -171,9 +171,9 @@ public class GenerationEngine {
         LayoutPlanner.Candidate c=reservation.candidate();
         if(roomManager.getActive(c.room().id()).filter(r -> r.type()!=RoomType.STARTING).isEmpty()){replanFutureRooms();return false;}
         // Revalidate terrain and reservations immediately before mutating any blocks.
-        if(!isWorldClear(c.origin(),c.box().size(),new int[]{Integer.MAX_VALUE})
-            || placed.stream().anyMatch(p -> new LayoutPlanner.Box(p.origin(),p.size()).overlaps(c.box()))
-            || reservations.values().stream().filter(r -> r!=reservation).anyMatch(r -> r.candidate().box().overlaps(c.box()))) {
+        if(!isWorldClear(c.box(),new int[]{Integer.MAX_VALUE})
+            || placed.stream().anyMatch(p -> footprint(p).conflicts(c.box()))
+            || reservations.values().stream().filter(r -> r!=reservation).anyMatch(r -> r.candidate().box().conflicts(c.box()))) {
             reservations.values().removeIf(r -> r.parentId().equals(parent.instanceId())); save(); return false;
         }
         var guard=search(roomManager.expansionRooms());var before=obstacles(parent.instanceId());var open=frontier();var viable=open.stream().filter(cp -> guard.continuation(cp,before,open)!=TopologySearch.Fit.NO).toList();
@@ -195,13 +195,13 @@ public class GenerationEngine {
         for(ConnectionPoint cp:next.connections(room)) {
             if(!isOpen(next,cp)) continue;
             ConnectionPoint door=cp.transform(next.transform(),room.size());
-            Vector3i adjacent=next.origin().add(door.position()).add(faceVector(door.direction()));
+            Vector3i at=next.origin().add(door.position());
             for(PlacedRoom existing:placed) {
                 Room template=roomManager.get(existing.roomId()).orElse(null); if(template==null) continue;
                 for(ConnectionPoint old:existing.connections(template)) {
                     if(!isOpen(existing,old)) continue;
                     ConnectionPoint other=old.transform(existing.transform(),template.size());
-                    if(door.compatibleWith(other) && adjacent.equals(existing.origin().add(other.position()))) {
+                    if(door.compatibleWith(other) && at.equals(existing.origin().add(other.position()))) {
                         next.generatedConnections().add(cp.id()); existing.generatedConnections().add(old.id());
                         reservations.remove(key(existing.instanceId(),old.id()));
                     }
@@ -213,20 +213,23 @@ public class GenerationEngine {
     private boolean isOpen(PlacedRoom pr,ConnectionPoint cp){return !pr.generatedConnections().contains(cp.id())&&!pr.closedConnections().containsKey(cp.id());}
     private ConnectionPoint worldDoor(PlacedRoom pr,Room room,ConnectionPoint cp){return cp.transform(pr.transform(),room.size()).offset(cp.id(),pr.origin());}
     private List<ConnectionPoint> frontier(){List<ConnectionPoint> result=new ArrayList<>();for(PlacedRoom pr:placed)roomManager.get(pr.roomId()).ifPresent(room -> {for(ConnectionPoint cp:pr.connections(room))if(isOpen(pr,cp))result.add(worldDoor(pr,room,cp));});return result;}
-    private List<LayoutPlanner.Box> obstacles(UUID ignoreParent){List<LayoutPlanner.Box> result=new ArrayList<>();for(PlacedRoom pr:placed)result.add(new LayoutPlanner.Box(pr.origin(),pr.size()));for(Reservation r:reservations.values())if(!r.parentId().equals(ignoreParent))result.add(r.candidate().box());return result;}
+    private LayoutPlanner.Box footprint(PlacedRoom pr){Room room=roomManager.get(pr.roomId()).orElse(null);return new LayoutPlanner.Box(pr.origin(),pr.size(),room==null?List.of():pr.connections(room).stream().map(cp -> worldDoor(pr,room,cp)).toList());}
+    private boolean sharedCell(Vector3i pos,List<LayoutPlanner.Box> shared){return shared.stream().anyMatch(b -> b.contains(pos));}
+    private List<LayoutPlanner.Box> sharedFaces(LayoutPlanner.Box box,UUID except){return placed.stream().filter(pr -> !pr.instanceId().equals(except)).map(this::footprint).filter(box::sharesBoundary).toList();}
+    private List<LayoutPlanner.Box> obstacles(UUID ignoreParent){List<LayoutPlanner.Box> result=new ArrayList<>();for(PlacedRoom pr:placed)result.add(footprint(pr));for(Reservation r:reservations.values())if(!r.parentId().equals(ignoreParent))result.add(r.candidate().box());return result;}
     private TopologySearch search(Collection<Room> catalog){
         int[] budget={Math.max(1000,Math.min(2000000,plugin.getConfig().getInt("generation.planning.world-block-budget",300000)))};
         return new TopologySearch(catalog,Math.max(1,Math.min(256,plugin.getConfig().getInt("generation.planning.topology-choices-per-room",64))),Math.max(1000,Math.min(2000000,plugin.getConfig().getInt("generation.planning.connection-check-budget",200000))),box -> {
-            World w=ensureWorld();Vector3i o=box.origin(),z=box.size();
+            World w=ensureWorld();Vector3i o=box.origin(),z=box.size();List<LayoutPlanner.Box> shared=sharedFaces(box,null);
             if(o.y()<w.getMinHeight()||(long)o.y()+z.y()>w.getMaxHeight()||!w.getWorldBorder().isInside(o.toLocation(w))||!w.getWorldBorder().isInside(o.add(z).subtract(new Vector3i(1,1,1)).toLocation(w)))return TopologySearch.Fit.NO;
-            for(int x=o.x();x<o.x()+z.x();x++)for(int y=o.y();y<o.y()+z.y();y++)for(int k=o.z();k<o.z()+z.z();k++){if(budget[0]--<=0)return TopologySearch.Fit.UNKNOWN;if(!w.getBlockAt(x,y,k).getType().isAir())return TopologySearch.Fit.NO;}
+            for(int x=o.x();x<o.x()+z.x();x++)for(int y=o.y();y<o.y()+z.y();y++)for(int k=o.z();k<o.z()+z.z();k++){if(budget[0]--<=0)return TopologySearch.Fit.UNKNOWN;if(!sharedCell(new Vector3i(x,y,k),shared)&&!w.getBlockAt(x,y,k).getType().isAir())return TopologySearch.Fit.NO;}
             return TopologySearch.Fit.YES;
         });
     }
     private void checkDeadEnds(){
         if(!running||!plugin.getConfig().getBoolean("generation.path-blocking.enabled",true)||roomManager.expansionRooms().isEmpty())return;
         List<Expansion> exits=openExits(new Location(ensureWorld(),0,0,0),Double.POSITIVE_INFINITY);if(exits.isEmpty())return;
-        var search=search(roomManager.expansionRooms());var doors=frontier();var boxes=placed.stream().map(pr -> new LayoutPlanner.Box(pr.origin(),pr.size())).toList();
+        var search=search(roomManager.expansionRooms());var doors=frontier();var boxes=placed.stream().map(pr -> footprint(pr)).toList();
         int checks=Math.min(2,exits.size());int start=Math.floorMod(deadEndCursor,exits.size());
         for(int i=0;i<checks;i++){Expansion e=exits.get((start+i)%exits.size());if(reservations.containsKey(key(e.parent().instanceId(),e.localPoint().id())))continue;Room room=roomManager.get(e.parent().roomId()).orElse(null);if(room!=null&&search.continuation(worldDoor(e.parent(),room,e.localPoint()),boxes,doors)==TopologySearch.Fit.NO)sealConnection(e.parent(),e.localPoint());}
         deadEndCursor=(start+checks)%exits.size();
@@ -267,12 +270,14 @@ public class GenerationEngine {
         if(instance.frozenConnections()==null)instance.connections(instance.diversity().connections(room));
         if(instance.props()==null)instance.props(plugin.getPropManager().compose(room,instance.instanceId()));
         World w = ensureWorld();
+        List<LayoutPlanner.Box> shared=sharedFaces(footprint(instance),instance.instanceId());
         pending.add(origin.toString());
         for (RoomBlock rb : room.blocks()) {
             if(instance.diversity().patches().stream().anyMatch(patch -> patch.contains(rb.position())))continue;
             Vector3i pos = origin.add(transform.transform(rb.position(), room.size()));
             BlockData data = Bukkit.createBlockData(rb.blockData()); rotateData(data, transform);
             placementQueue.add(() -> {
+                if(sharedCell(pos,shared))return;
                 Block block = w.getBlockAt(pos.x(), pos.y(), pos.z());
                 block.setBlockData(data, false);
                 if (block.getType() == Material.CHISELED_BOOKSHELF) plugin.getBookStorageManager().populateBookshelf(block);
@@ -288,7 +293,7 @@ public class GenerationEngine {
                 for (RoomBlock rb : v.blocks()) {
                     Vector3i pos = origin.add(transform.transform(rb.position(), room.size()));
                     BlockData data = Bukkit.createBlockData(rb.blockData()); rotateData(data, transform);
-                    placementQueue.add(() -> w.getBlockAt(pos.x(), pos.y(), pos.z()).setBlockData(data, false));
+                    placementQueue.add(() -> {if(!sharedCell(pos,shared))w.getBlockAt(pos.x(), pos.y(), pos.z()).setBlockData(data, false);});
                 }
                 break;
             }
@@ -296,28 +301,34 @@ public class GenerationEngine {
         for(var patch:instance.diversity().patches()) {
             for(int y=0;y<patch.size().y();y++)for(int z=0;z<patch.size().z();z++)for(int x=0;x<patch.size().x();x++) {
                 Vector3i pos=origin.add(transform.transform(patch.min().add(new Vector3i(x,y,z)),room.size()));
-                placementQueue.add(() -> w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false));
+                placementQueue.add(() -> {if(!sharedCell(pos,shared))w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false);});
             }
             for(RoomBlock rb:patch.blocks()) {
                 Vector3i pos=origin.add(transform.transform(rb.position(),room.size()));BlockData data=Bukkit.createBlockData(rb.blockData());rotateData(data,transform);
-                placementQueue.add(() -> {Block block=w.getBlockAt(pos.x(),pos.y(),pos.z());block.setBlockData(data,false);if(block.getType()==Material.CHISELED_BOOKSHELF)plugin.getBookStorageManager().populateBookshelf(block);if(block.getState() instanceof Sign sign)updateLibrarySign(sign,pos);});
+                placementQueue.add(() -> {if(sharedCell(pos,shared))return;Block block=w.getBlockAt(pos.x(),pos.y(),pos.z());block.setBlockData(data,false);if(block.getType()==Material.CHISELED_BOOKSHELF)plugin.getBookStorageManager().populateBookshelf(block);if(block.getState() instanceof Sign sign)updateLibrarySign(sign,pos);});
             }
         }
         for(com.infinitylibrary.props.PropArea area:instance.props().areas()) {
             for(int y=0;y<area.size().y();y++)for(int z=0;z<area.size().z();z++)for(int x=0;x<area.size().x();x++) {
                 Vector3i local=area.min().add(new Vector3i(x,y,z));
                 Vector3i pos=origin.add(transform.transform(local,room.size()));
-                placementQueue.add(() -> w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false));
+                placementQueue.add(() -> {if(!sharedCell(pos,shared))w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false);});
             }
         }
         for(RoomBlock rb:instance.props().blocks()) {
             Vector3i pos=origin.add(transform.transform(rb.position(),room.size()));
             BlockData data=Bukkit.createBlockData(rb.blockData());rotateData(data,transform);
             placementQueue.add(() -> {
+                if(sharedCell(pos,shared))return;
                 Block block=w.getBlockAt(pos.x(),pos.y(),pos.z());block.setBlockData(data,false);
                 if(block.getType()==Material.CHISELED_BOOKSHELF)plugin.getBookStorageManager().populateBookshelf(block);
                 if(block.getState() instanceof Sign sign)updateLibrarySign(sign,pos);
             });
+        }
+        // Both templates may contain doorway markers/blocks. Open the joined aperture last.
+        for(ConnectionPoint cp:instance.connections(room))if(instance.generatedConnections().contains(cp.id()))for(Vector3i cell:cp.cells()){
+            Vector3i pos=origin.add(transform.transform(cell,room.size()));
+            placementQueue.add(() -> w.getBlockAt(pos.x(),pos.y(),pos.z()).setType(Material.AIR,false));
         }
         placementQueue.add(() -> { pending.remove(origin.toString()); save(); });
     }
@@ -367,14 +378,13 @@ public class GenerationEngine {
         return dz > 0 ? "SOUTH" : "NORTH";
     }
 
-    private boolean isWorldClear(Vector3i origin, Vector3i size,int[] budget) {
-        World w = ensureWorld();
-        if (origin.y() < w.getMinHeight() || (long) origin.y() + size.y() > w.getMaxHeight()) return false;
-        if (!w.getWorldBorder().isInside(origin.toLocation(w)) || !w.getWorldBorder().isInside(origin.add(size).subtract(new Vector3i(1,1,1)).toLocation(w))) return false;
-        for (int x=origin.x(); x<origin.x()+size.x(); x++) for (int y=origin.y(); y<origin.y()+size.y(); y++) for (int z=origin.z(); z<origin.z()+size.z(); z++) {
-            if (budget[0]-- <= 0) return false;
-            Material m = w.getBlockAt(x,y,z).getType();
-            if (m != Material.AIR && m != Material.CAVE_AIR && m != Material.VOID_AIR) return false;
+    private boolean isWorldClear(LayoutPlanner.Box box,int[] budget) {
+        Vector3i origin=box.origin(),size=box.size();World w=ensureWorld();List<LayoutPlanner.Box> shared=sharedFaces(box,null);
+        if(origin.y()<w.getMinHeight()||(long)origin.y()+size.y()>w.getMaxHeight())return false;
+        if(!w.getWorldBorder().isInside(origin.toLocation(w))||!w.getWorldBorder().isInside(origin.add(size).subtract(new Vector3i(1,1,1)).toLocation(w)))return false;
+        for(int x=origin.x();x<origin.x()+size.x();x++)for(int y=origin.y();y<origin.y()+size.y();y++)for(int z=origin.z();z<origin.z()+size.z();z++){
+            if(budget[0]--<=0)return false;
+            if(!sharedCell(new Vector3i(x,y,z),shared)&&!w.getBlockAt(x,y,z).getType().isAir())return false;
         }
         return true;
     }
@@ -416,7 +426,7 @@ public class GenerationEngine {
     }
 
     public void save() {
-        YamlConfiguration y = new YamlConfiguration(); y.set("pending", new ArrayList<>(pending)); y.set("paused", paused); y.set("world", plugin.getConfig().getString("world")); y.set("sealed-blocks", sealedBlocks.stream().map(Vector3i::toString).toList()); ConfigurationSection root = y.createSection("rooms"); int i=0;
+        YamlConfiguration y = new YamlConfiguration(); y.set("connection-layout","shared-plane-v1"); y.set("pending", new ArrayList<>(pending)); y.set("paused", paused); y.set("world", plugin.getConfig().getString("world")); y.set("sealed-blocks", sealedBlocks.stream().map(Vector3i::toString).toList()); ConfigurationSection root = y.createSection("rooms"); int i=0;
         synchronized (placed) { for (PlacedRoom pr : placed) { ConfigurationSection s = root.createSection(String.valueOf(i++)); s.set("uuid", pr.instanceId().toString()); s.set("room-id", pr.roomId()); pr.origin().write(s.createSection("origin")); pr.size().write(s.createSection("size")); writeTransform(s.createSection("transform"), pr.transform()); s.set("generated-connections", new ArrayList<>(pr.generatedConnections())); if(pr.props()!=null)pr.props().write(s.createSection("props"));if(pr.diversity()!=null)pr.diversity().write(s.createSection("diversity"));if(pr.frozenConnections()!=null){var cps=s.createSection("connections");for(ConnectionPoint cp:pr.frozenConnections())cp.write(cps.createSection(cp.id()));}var closed=s.createSection("closed-connections");for(var entry:pr.closedConnections().entrySet())closed.set(entry.getKey(),entry.getValue().stream().map(b -> b.position()+"|"+b.blockData()).toList()); } }
         ConfigurationSection plans=y.createSection("plans"); int j=0;
         for(Reservation r:reservations.values()) {
@@ -443,7 +453,7 @@ public class GenerationEngine {
             var closed=s.getConfigurationSection("closed-connections");if(closed!=null)for(String id:closed.getKeys(false)){List<RoomBlock> blocks=new ArrayList<>();for(String line:closed.getStringList(id)){String[] parts=line.split("\\|",2);blocks.add(new RoomBlock(Vector3i.parse(parts[0]),parts[1]));}pr.closedConnections().put(id,List.copyOf(blocks));}
             placed.add(pr); }
         ConfigurationSection plans=y.getConfigurationSection("plans");
-        if(plans!=null) for(String key:plans.getKeys(false)) try {
+        if(plans!=null&&y.getString("connection-layout","").equals("shared-plane-v1")) for(String key:plans.getKeys(false)) try {
             var s=plans.getConfigurationSection(key); UUID parent=UUID.fromString(s.getString("parent"));
             Room room=roomManager.getActive(s.getString("room")).filter(r -> r.type()!=RoomType.STARTING).orElseThrow(); String door=s.getString("door");
             String base=plugin.getConfig().getString("generation.base-room-id","builtin_modular");

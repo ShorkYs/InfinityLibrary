@@ -396,7 +396,30 @@ public class LibraryProbe extends JavaPlugin {
                 String snapshot=child.getConfigurationSection("connections").getValues(true).toString();rooms.updateDiversity(normal.id(),List.of());e.stop();e.start();
                 var recovered=YamlConfiguration.loadConfiguration(file).getConfigurationSection("rooms.1");check(snapshot.equals(recovered.getConfigurationSection("connections").getValues(true).toString()),"placed variant doors remain unchanged after template edits and reload");
                 check(e.placeRoomImmediately(normal.id()),"library can expand through frozen variant topology after authoring edits");
-                later(()->{getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();},4);
+                later(()->{sharedPlaneChecks(p);},4);
+            },5);
+        },3);
+    }
+    List<RoomBlock> shell(Material material){List<RoomBlock> blocks=new ArrayList<>();for(int x=0;x<7;x++)for(int y=0;y<5;y++)for(int z=0;z<7;z++)if(x==0||x==6||y==0||y==4||z==0||z==6)blocks.add(new RoomBlock(new Vector3i(x,y,z),material.createBlockData().getAsString()));return blocks;}
+    ConnectionPoint storedDoor(org.bukkit.configuration.ConfigurationSection placed,String id){var cp=ConnectionPoint.read(id,placed.getConfigurationSection("connections."+id));var t=placed.getConfigurationSection("transform");var transform=new RoomTransform(com.infinitylibrary.model.Rotation.valueOf(t.getString("rotation")),t.getBoolean("flip-x"),t.getBoolean("flip-z"));return cp.transform(transform,Vector3i.read(placed.getConfigurationSection("size"))).offset(id,Vector3i.read(placed.getConfigurationSection("origin")));}
+    void sharedPlaneChecks(InfinityLibraryPlugin p){
+        var e=p.getGenerationEngine();var world=e.ensureWorld();var cfg=p.getConfig();cfg.set("generation.path-blocking.enabled",false);cfg.set("generation.placement-blocks-per-tick",1800);cfg.set("generation.start-room-id","shared_start");cfg.set("generation.base-room-id","shared_normal");cfg.set("generation.max-total-rooms",4);cfg.set("start-location.x",26000);cfg.set("start-location.y",80);cfg.set("start-location.z",26000);
+        var east=new ConnectionPoint("east",new Vector3i(6,1,3),org.bukkit.block.BlockFace.EAST,3,3);var west=new ConnectionPoint("west",new Vector3i(0,1,3),org.bukkit.block.BlockFace.WEST,3,3);
+        Room start=new Room("shared_start",RoomType.STARTING,new Vector3i(7,5,7),List.of(east),shell(Material.GOLD_BLOCK),List.of(),100);Room normal=new Room("shared_normal",RoomType.FILLER,start.size(),List.of(west,east),shell(Material.STONE_BRICKS),List.of(),100);
+        try{var file=p.getDataFolder().toPath().resolve("rooms.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);start.write(y.createSection("rooms.shared_start"));normal.write(y.createSection("rooms.shared_normal"));y.save(file);p.getRoomManager().load();}catch(Exception ex){throw new RuntimeException(ex);}
+        for(int x=25990;x<26035;x++)for(int y=79;y<90;y++)for(int z=25990;z<26015;z++)world.getBlockAt(x,y,z).setType(Material.AIR,false);
+        e.stop();e.start();e.resetToStart();later(()->{
+            world.getBlockAt(26008,81,26003).setType(Material.DIAMOND_BLOCK,false);check(!e.placeRoomImmediately(normal.id())&&e.placedCount()==1,"shared-plane placement still refuses unrelated terrain in room interior");check(world.getBlockAt(26008,81,26003).getType()==Material.DIAMOND_BLOCK,"failed shared placement preserves obstructing terrain");world.getBlockAt(26008,81,26003).setType(Material.AIR,false);
+            check(e.placeRoomImmediately(normal.id()),"solid authored rooms join by sharing their doorway wall plane");
+            var file=p.getDataFolder().toPath().resolve("generated.yml").toFile();var y=YamlConfiguration.loadConfiguration(file);var root=y.getConfigurationSection("rooms.0");var child=y.getConfigurationSection("rooms.1");String entrance=child.getStringList("generated-connections").getFirst();var a=storedDoor(root,"east");var b=storedDoor(child,entrance);
+            check(a.position().equals(b.position())&&a.position().x()==26006&&a.compatibleWith(b),"placed connection anchors overlap exactly instead of being one block apart");check(new HashSet<>(a.cells()).equals(new HashSet<>(b.cells())),"both rooms share all nine doorway opening cells");
+            check(y.getConfigurationSection("plans").getKeys(false).stream().anyMatch(k -> y.getInt("plans."+k+".origin.x")==26012),"future reservation uses overlapping doorway spacing too");
+            e.stop();e.start();check(e.queuedBlocks()>0&&e.placedCount()==2,"pending shared-wall placement recovers without duplicating rooms");
+            later(()->{
+                check(a.cells().stream().allMatch(pos -> world.getBlockAt(pos.x(),pos.y(),pos.z()).isEmpty()),"shared aperture is opened after both solid templates are applied");check(world.getBlockAt(26006,80,26000).getType()==Material.GOLD_BLOCK&&world.getBlockAt(26006,84,26003).getType()==Material.GOLD_BLOCK,"existing boundary floor and ceiling survive shared-wall recovery");check(world.getBlockAt(26007,82,26003).isEmpty(),"there is no second doorway wall one block beyond the shared opening");
+                e.stop();try{var old=YamlConfiguration.loadConfiguration(file);old.set("connection-layout",null);old.save(file);}catch(Exception ex){throw new RuntimeException(ex);}e.start();check(e.plannedCount()==0&&e.placedCount()==2,"legacy-spacing reservations are discarded while built rooms are retained");var migrated=YamlConfiguration.loadConfiguration(file);check(Vector3i.read(migrated.getConfigurationSection("rooms.1.origin")).equals(Vector3i.read(child.getConfigurationSection("origin"))),"layout migration leaves existing room coordinates unchanged");
+                check(e.placeRoomImmediately(normal.id()),"new overlapping-room continuation works after old-plan invalidation");
+                later(()->{check(e.placedCount()==3&&e.queuedBlocks()==0,"three shared-wall rooms finish without collision or queue errors");getLogger().info("ALL "+count+" INTEGRATION CHECKS PASSED");Bukkit.shutdown();},5);
             },5);
         },3);
     }
