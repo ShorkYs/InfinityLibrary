@@ -9,6 +9,8 @@ import org.bukkit.configuration.ConfigurationSection;
 import java.util.*;
 
 public class Room {
+    private final List<RoomRegion> regions;
+    public List<RoomRegion> regions(){return regions;}
     private final String id;
     private final RoomType type;
     private final Vector3i size;
@@ -26,6 +28,10 @@ public class Room {
         this(id,type,size,connections,blocks,variations,spawnChance,propAreas,List.of());
     }
     public Room(String id,RoomType type,Vector3i size,List<ConnectionPoint> connections,List<RoomBlock> blocks,List<VariationArea> variations,double spawnChance,List<PropArea> propAreas,List<DiversityArea> diversityAreas) {
+        this(id,type,size,connections,blocks,variations,spawnChance,propAreas,diversityAreas,List.of());
+    }
+    public Room(String id,RoomType type,Vector3i size,List<ConnectionPoint> connections,List<RoomBlock> blocks,List<VariationArea> variations,double spawnChance,List<PropArea> propAreas,List<DiversityArea> diversityAreas,List<RoomRegion> regions){
+        this.regions=List.copyOf(regions);
         this.diversityAreas=List.copyOf(diversityAreas);
         this.propAreas=List.copyOf(propAreas);
         this.id = Objects.requireNonNull(id);
@@ -48,6 +54,7 @@ public class Room {
     public double spawnChance() { return spawnChance; }
 
     public void validate() {
+        if(regions.size()>64)throw new IllegalArgumentException("At most 64 reading/category regions per room.");for(var region:regions){var p=region.min();var z=region.size();if(p.x()<0||p.y()<0||p.z()<0||(long)p.x()+z.x()>size.x()||(long)p.y()+z.y()>size.y()||(long)p.z()+z.z()>size.z())throw new IllegalArgumentException("Room region outside room bounds.");}
         if (connections.isEmpty()&&diversityAreas.stream().flatMap(a -> a.variants().stream()).allMatch(v -> v.connections().isEmpty())) throw new IllegalArgumentException("Room " + id + " must contain at least one connection point");
         if (size.x() < 1 || size.y() < 1 || size.z() < 1) throw new IllegalArgumentException("Room " + id + " has invalid size");
         boolean hasBookshelf = false, hasSeat = false;
@@ -130,6 +137,7 @@ public class Room {
     public BlockData data(RoomBlock block) { return org.bukkit.Bukkit.createBlockData(block.blockData()); }
 
     public void write(ConfigurationSection s) {
+        var regionRoot=s.createSection("regions");int index=0;for(var region:regions)region.write(regionRoot.createSection("region_"+(index++)));
         s.set("type", type.name());
         ConfigurationSection sizeSec = s.createSection("size"); size.write(sizeSec);
         ConfigurationSection cSec = s.createSection("connections");
@@ -162,6 +170,7 @@ public class Room {
         List<PropArea> areas=new ArrayList<>();ConfigurationSection a=s.getConfigurationSection("prop-areas");
         if(a!=null)for(String key:a.getKeys(false))areas.add(PropArea.read(key,a.getConfigurationSection(key)));
         List<DiversityArea> diversity=new ArrayList<>();var d=s.getConfigurationSection("diversity");if(d!=null)for(String key:d.getKeys(false))diversity.add(DiversityArea.read(key,d.getConfigurationSection(key)));
-        return new Room(id, type, size, cps, blocks, variations, s.getDouble("spawn-chance", 100.0),areas,diversity);
+        List<RoomRegion> regions=new ArrayList<>();var regionRoot=s.getConfigurationSection("regions");if(regionRoot!=null)for(String key:regionRoot.getKeys(false))regions.add(RoomRegion.read(regionRoot.getConfigurationSection(key)));
+        return new Room(id, type, size, cps, blocks, variations, s.getDouble("spawn-chance", 100.0),areas,diversity,regions);
     }
 }

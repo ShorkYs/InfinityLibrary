@@ -1,14 +1,24 @@
-# Infinity Library 2.6
+# Infinity Library 3.0
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring
-**Java 25**. No client mod or resource pack is needed.
+**Java 25**. An optional Fabric builder mod adds editing controls and world-space selection outlines; normal players need no client mod.
 
-**[Download plugin JAR](downloads/InfinityLibraryPlugin-2.6.0.jar?raw=true)** ·
-**[Download source ZIP](downloads/InfinityLibrary-2.6.0-source.zip?raw=true)**
+**[Download plugin JAR](downloads/InfinityLibraryPlugin-3.0.0.jar?raw=true)** ·
+**[Download source ZIP](downloads/InfinityLibrary-3.0.0-source.zip?raw=true)**
 
 If GitHub opens a file preview, use **Download raw file**. Put the plugin JAR in your
 server's `plugins/` folder. Stop your server before replacing an older plugin JAR,
 remove that old JAR, and keep the plugin data folder. Back up your library world first.
+
+## New in 3.0
+
+- One neighborhood constraint planner considers nearby rooms and their open exits together, with bounded backtracking, forward checking and seeded weighted template choices.
+- Shared doorway planes, terrain checks, frontier protection, queued placement, recovery, props/categories, exact/PACKED decoration, Room Diversity and configurable dead-end walls remain supported.
+- All authoring wands use left-click first corner, right-click second corner. `/il builder` opens tools, with undo/redo/cancel and saved reading/shelf regions.
+- **[Fabric builder mod JAR](downloads/InfinityLibraryBuilder-3.0.0.jar?raw=true)** adds **B** for the room editor and **V** for outlines. Includes a room browser, selection visualizations, settings and live preview controls. See [BUILDER.md](BUILDER.md).
+- Writing uses Minecraft's Book & Quill editor. Published books automatically stock empty chiseled-bookshelf slots in loaded library chunks, preserving existing contents.
+
+Existing `generated.yml` placements and room IDs are retained. Cached layout reservations are rebuilt for the new planner. No world reset is required. The proposed second generation mode is retired; any experimental world/files are left untouched.
 
 ## Community tools and particle navigation (new in 2.6)
 
@@ -285,14 +295,14 @@ It removes player changes in those volumes. There is no general world undo.
 
 Template capture stores block data rather than full block-entity NBT, inventories or
 entities. Vertical connectors are geometric openings, not automatic elevators. Reading
-seat/table wand marks remain session-only. Unfinished room recovery can reroll legacy variations outside frozen Diversity patches;
+Reading/shelf regions captured in templates follow generated instances; use `/il builder apply` for source-build marks. Unfinished room recovery can reroll legacy variations outside frozen Diversity patches;
 wait for construction before modifying those rooms. Private-book rules apply within the
 plugin; they are not DRM against server administrators or other plugins.
 
 ## Build and verification
 
 Install JDK 25, then run `./gradlew clean build` (`gradlew.bat clean build` on Windows).
-Output: `build/libs/InfinityLibraryPlugin-2.6.0.jar`. The pinned Paper API is
+Output: `build/libs/InfinityLibraryPlugin-3.0.0.jar`. The pinned Paper API is
 `26.3.build.253-stable` and is supplied by the server at runtime.
 
 `./gradlew test` covers transforms, planning, manuscripts, room catalogs, exact decoration

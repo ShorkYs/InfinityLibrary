@@ -130,8 +130,8 @@ public class SelectionManager {
         player.sendMessage(ChatColor.GOLD + "Bookshelf category wand set to category: " + bookshelfCategoryModes.get(player.getUniqueId()));
     }
 
-    public boolean isReadingTable(org.bukkit.Location location) { return readingTables.contains(locationKey(location)); }
-    public boolean isReadingSeat(org.bukkit.Location location) { return readingSeats.contains(locationKey(location)); }
+    public boolean isReadingTable(org.bukkit.Location location) { return readingTables.contains(locationKey(location))||(plugin.getAuthoringManager()!=null&&plugin.getAuthoringManager().reading(location,"table")); }
+    public boolean isReadingSeat(org.bukkit.Location location) { return readingSeats.contains(locationKey(location))||(plugin.getAuthoringManager()!=null&&plugin.getAuthoringManager().reading(location,"seat")); }
 
     public Mode mode(Player player) {
         return modes.getOrDefault(player.getUniqueId(), Mode.POS1);
@@ -168,6 +168,16 @@ public class SelectionManager {
     public List<VariationArea> stagedVariations(Player player) { return List.copyOf(stagedVariations.getOrDefault(player.getUniqueId(), List.of())); }
     public void clearStagedVariations(Player player) { stagedVariations.remove(player.getUniqueId()); pendingVariationStart.remove(player.getUniqueId()); variationCounters.remove(player.getUniqueId()); }
 
+    public String wandKind(ItemStack item){if(item==null||!item.hasItemMeta())return null;var data=item.getItemMeta().getPersistentDataContainer();for(var e:Map.of(selectionWandKey,"room",connectionWandKey,"connection",variationWandKey,"variation",bookshelfCategoryWandKey,"shelf",readingTableWandKey,"table",readingSeatWandKey,"seat").entrySet())if(data.has(e.getKey(),PersistentDataType.BYTE))return e.getValue();return null;}
+    public Runnable checkpoint(Player p){UUID id=p.getUniqueId();var conn=stagedConnections.containsKey(id)?new ArrayList<>(stagedConnections.get(id)):null;var vars=stagedVariations.containsKey(id)?new ArrayList<>(stagedVariations.get(id)):null;Vector3i a=pendingConnectionStart.get(id),b=pendingVariationStart.get(id),c=pendingBookshelfCategoryStart.get(id),d=pendingReadingTableStart.get(id),e=pendingReadingSeatStart.get(id);return ()->{restore(stagedConnections,id,conn==null?null:new ArrayList<>(conn));restore(stagedVariations,id,vars==null?null:new ArrayList<>(vars));restore(pendingConnectionStart,id,a);restore(pendingVariationStart,id,b);restore(pendingBookshelfCategoryStart,id,c);restore(pendingReadingTableStart,id,d);restore(pendingReadingSeatStart,id,e);};}
+    private static <T> void restore(Map<UUID,T> map,UUID id,T value){if(value==null)map.remove(id);else map.put(id,value);}
+    private Map<UUID,Vector3i> pending(String tool){return switch(tool){case "connection"->pendingConnectionStart;case "variation"->pendingVariationStart;case "shelf"->pendingBookshelfCategoryStart;case "table"->pendingReadingTableStart;case "seat"->pendingReadingSeatStart;default->throw new IllegalArgumentException("Not a regional tool");};}
+    public void restartCorner(Player p,String tool){pending(tool).remove(p.getUniqueId());}
+    public boolean hasCorner(Player p,String tool){return pending(tool).containsKey(p.getUniqueId());}
+    public Optional<Vector3i> firstCorner(Player p,String tool){return Optional.ofNullable(pending(tool).get(p.getUniqueId()));}
+    public void loadStaging(Player p,com.infinitylibrary.model.Room room){stagedConnections.put(p.getUniqueId(),new ArrayList<>(room.connections()));stagedVariations.put(p.getUniqueId(),new ArrayList<>(room.variations()));}
+    public void clearPending(Player p){UUID id=p.getUniqueId();for(String kind:List.of("connection","variation","shelf","table","seat"))pending(kind).remove(id);}
+    private void validateRegion(org.bukkit.World world,Vector3i min,Vector3i max){long size=((long)max.x()-min.x()+1)*((long)max.y()-min.y()+1)*((long)max.z()-min.z()+1);if(size>100000||size<=0)throw new IllegalArgumentException("Region exceeds 100,000 blocks.");for(int x=min.x()>>4;x<=max.x()>>4;x++)for(int z=min.z()>>4;z<=max.z()>>4;z++)if(!world.isChunkLoaded(x,z))throw new IllegalArgumentException("Both corners and the region must be in loaded chunks.");}
     public boolean handle(Player player, Action action, Block clickedBlock) {
         if (clickedBlock == null) return false;
         ItemStack held = player.getInventory().getItemInMainHand();
@@ -178,8 +188,7 @@ public class SelectionManager {
         if (isReadingSeatWand(held)) return handleReadingRegionWand(player, action, clickedBlock, false);
         if (!isSelectionWand(held)) return false;
         if (action != Action.LEFT_CLICK_BLOCK && action != Action.RIGHT_CLICK_BLOCK) return false;
-        Mode mode = mode(player);
-        if (mode == Mode.POS1 || action == Action.LEFT_CLICK_BLOCK) {
+        if (action == Action.LEFT_CLICK_BLOCK) {
             plugin.getRoomManager().setPos1(player, clickedBlock.getLocation());
             player.sendMessage(ChatColor.LIGHT_PURPLE + "Selection position 1 set to " + format(clickedBlock));
         } else {
@@ -199,6 +208,7 @@ public class SelectionManager {
         pendingBookshelfCategoryStart.remove(id);
         Vector3i min = min(first, current), max = max(first, current);
         String category = bookshelfCategoryModes.getOrDefault(id, "general");
+        validateRegion(clickedBlock.getWorld(),min,max);
         int changed = 0;
         for (int x=min.x(); x<=max.x(); x++) for (int y=min.y(); y<=max.y(); y++) for (int z=min.z(); z<=max.z(); z++) {
             Block block = clickedBlock.getWorld().getBlockAt(x, y, z);
@@ -218,6 +228,8 @@ public class SelectionManager {
         pending.remove(id);
         Vector3i min = min(first, current), max = max(first, current);
         Set<String> target = table ? readingTables : readingSeats;
+        validateRegion(clickedBlock.getWorld(),min,max);
+        validateRegion(clickedBlock.getWorld(),min,max);
         int changed = 0;
         for (int x=min.x(); x<=max.x(); x++) for (int y=min.y(); y<=max.y(); y++) for (int z=min.z(); z<=max.z(); z++) { target.add(locationKey(clickedBlock.getWorld().getName(), x, y, z)); changed++; }
         player.sendMessage(ChatColor.YELLOW + "Marked " + changed + " block(s) as a " + (table ? "reading table" : "reading seat") + " area.");

@@ -7,6 +7,7 @@ start-location:
   pitch: 0
 proximity-radius: 9.0
 generation:
+  mode: unified
   max-rooms-per-tick: 1
   # Recheck explorers even when they stand still after construction/teleport.
   exploration-check-interval-ticks: 5
@@ -15,7 +16,10 @@ generation:
   placement-blocks-per-tick: 1800
   retry-room-selection: 16
   planning:
-    # Search sibling layouts before placing a room. Values are bounded internally.
+    # Search neighboring room exits together before placing rooms.
+    neighborhood-radius: 48
+    seed: 20261120
+    search-nodes: 512
     beam-width: 12
     # Retained alternatives PER TEMPLATE per door, so every eligible room is considered.
     candidates-per-door: 12
@@ -74,3 +78,8 @@ preview:
   max-volume: 32768
   duration-seconds: 90
   max-distance: 80
+
+bookshelves:
+  # Only loaded chunks are inspected; existing occupied slots are never replaced.
+  chunks-per-tick: 1
+  shelves-per-pass: 8

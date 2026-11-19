@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"infinitylibrary_builder","version":"${version}","name":"Infinity Library Builder","description":"Client-side authoring tools for the Infinity Library Paper plugin.","environment":"client","entrypoints":{"client":["com.infinitylibrary.builder.BuilderClient"]},"depends":{"fabricloader":">=0.20.1","minecraft":"26.3","java":">=25","fabric-api":"*"}}

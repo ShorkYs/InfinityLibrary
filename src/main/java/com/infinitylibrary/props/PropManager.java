@@ -70,6 +70,15 @@ public final class PropManager {
     public ItemStack wand() {
         ItemStack item=new ItemStack(Material.AMETHYST_SHARD);var meta=item.getItemMeta();meta.setDisplayName("§dDecoration Area Wand");meta.setLore(List.of("§7Select the whole room first.","§7Click two interior corners, then choose category.","§7EXACT size by default; /il decocategory <category>"));meta.getPersistentDataContainer().set(wandKey,PersistentDataType.BYTE,(byte)1);item.setItemMeta(meta);return item;
     }
+    public boolean awaitingCategory(Player p){return pendingAreas.containsKey(p.getUniqueId());}
+    public List<PropArea> previewAreas(Player p){List<PropArea> all=new ArrayList<>(completed(p));var pending=pendingAreas.get(p.getUniqueId());if(pending!=null)all.add(pending.area());return all;}
+    public boolean isWand(ItemStack item){return item!=null&&item.hasItemMeta()&&item.getItemMeta().getPersistentDataContainer().has(wandKey,PersistentDataType.BYTE);}
+    public boolean hasCorner(Player p){return first.containsKey(p.getUniqueId());}
+    public void restartCorner(Player p){first.remove(p.getUniqueId());}
+    public Optional<Vector3i> firstCorner(Player p){return Optional.ofNullable(first.get(p.getUniqueId()));}
+    public List<PropArea> completed(Player p){return List.copyOf(staged.getOrDefault(p.getUniqueId(),List.of()));}
+    public Runnable checkpoint(Player p){UUID id=p.getUniqueId();var areas=staged.containsKey(id)?new ArrayList<>(staged.get(id)):null;var ctx=contexts.get(id);var start=first.get(id);var pending=pendingAreas.get(id);return ()->{if(areas==null)staged.remove(id);else staged.put(id,new ArrayList<>(areas));if(ctx==null)contexts.remove(id);else contexts.put(id,ctx);if(start==null)first.remove(id);else first.put(id,start);if(pending==null)pendingAreas.remove(id);else pendingAreas.put(id,pending);};}
+    public void loadStaging(Player p,com.infinitylibrary.model.Room room){clear(p);contexts.put(p.getUniqueId(),context(p));staged.put(p.getUniqueId(),new ArrayList<>(room.propAreas()));}
     public boolean handle(Player p,Action action,Block block) {
         ItemStack held=p.getInventory().getItemInMainHand();
         if(block==null||held==null||!held.hasItemMeta()||!held.getItemMeta().getPersistentDataContainer().has(wandKey,PersistentDataType.BYTE))return false;
@@ -108,6 +117,7 @@ public final class PropManager {
     }
     public void category(Player p,String category) {PendingArea pending=pendingAreas.get(p.getUniqueId());if(pending==null)throw new IllegalArgumentException("Select two decoration-area corners first.");category(p,category,pending.area().rotate());}
     private void categoryDialog(Player p) {
+        if(plugin.getBuilderBridge()!=null&&plugin.getBuilderBridge().connected(p)){p.sendMessage("Choose the pending decoration category in the builder Settings tab.");return;}
         PendingArea pending=pendingAreas.get(p.getUniqueId());PropArea area=pending.area();
         String categories=all().stream().filter(prop -> !ExactDecorationSelector.rotations(new PropArea("check",area.min(),area.size(),"*",0,area.rotate()),prop).isEmpty()).map(Prop::category).distinct().sorted().limit(10).collect(java.util.stream.Collectors.joining(", "));
         var input=io.papermc.paper.registry.data.dialog.input.DialogInput.text("category",net.kyori.adventure.text.Component.text("Decoration category")).initial(area.category()).maxLength(64).width(300).build();

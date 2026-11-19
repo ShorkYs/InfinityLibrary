@@ -34,11 +34,10 @@ public class BookListener implements Listener {
 
     @EventHandler(ignoreCancelled = true) public void onInteract(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) return;
-        if (plugin.getDiversityManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
-        if (plugin.getPropManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())) { e.setCancelled(true); return; }
-        if (plugin.getSelectionManager().handle(e.getPlayer(), e.getAction(), e.getClickedBlock())) { e.setCancelled(true); return; }
+        if(plugin.getAuthoringManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())){e.setCancelled(true);return;}
         if(e.getAction()==Action.RIGHT_CLICK_BLOCK&&plugin.getNoticeboardManager().isBoard(e.getClickedBlock())){e.setCancelled(true);plugin.getNoticeboardManager().browser(e.getPlayer(),0);return;}
-        if (!e.getPlayer().getWorld().getName().equals(plugin.getConfig().getString("world", "InfinityLibrary"))) return;
+        if((e.getAction()==Action.RIGHT_CLICK_AIR||e.getAction()==Action.RIGHT_CLICK_BLOCK)&&e.getItem()!=null&&e.getItem().getType()==Material.WRITTEN_BOOK&&!plugin.getBookStorageManager().canRead(e.getPlayer(),e.getItem())){e.setCancelled(true);e.getPlayer().sendMessage("This library book is private.");return;}
+        if (!e.getPlayer().getWorld().getName().equals(plugin.getGenerationEngine().worldName())) return;
         if (e.getAction() == Action.LEFT_CLICK_BLOCK && e.getClickedBlock() != null && e.getClickedBlock().getType() == Material.LECTERN) {
             plugin.getGuiManager().openLecternBookEditor(e.getPlayer());
             e.setCancelled(true);
@@ -144,7 +143,7 @@ public class BookListener implements Listener {
 
     private void sendBookshelfActionBars() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getWorld().getName().equals(plugin.getConfig().getString("world", "InfinityLibrary"))) continue;
+            if (!player.getWorld().getName().equals(plugin.getGenerationEngine().worldName())) continue;
             Block target = player.getTargetBlockExact(6);
             if (target == null || target.getType() != Material.CHISELED_BOOKSHELF) continue;
             String summary = plugin.getBookStorageManager().bookshelfSlotSummary(target);
@@ -154,6 +153,7 @@ public class BookListener implements Listener {
 
     @EventHandler public void onSneak(PlayerToggleSneakEvent e) { if (e.isSneaking()) clearReadingIndicator(e.getPlayer()); }
     public void cleanup(Player player) {
+        plugin.getBuilderBridge().cleanup(player);plugin.getAuthoringManager().clear(player);
         plugin.getPreviewManager().stop(player);plugin.getNavigationManager().stop(player);
         plugin.getManagedDialogs().invalidate(player);plugin.getReadingManager().cleanup(player);plugin.getCollaborationManager().cleanup(player);
         plugin.getDiversityManager().clear(player);
@@ -165,6 +165,7 @@ public class BookListener implements Listener {
         plugin.getBookStorageManager().endSession(player);
     }
     public void cleanupAll() { for (Player player : Bukkit.getOnlinePlayers()) cleanup(player); }
+    @EventHandler public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent e) { plugin.getBuilderBridge().cleanup(e.getPlayer()); plugin.getAuthoringManager().clear(e.getPlayer()); }
     @EventHandler public void onQuit(PlayerQuitEvent e) { cleanup(e.getPlayer()); }
 
     @EventHandler public void onSearchChat(AsyncPlayerChatEvent e) {

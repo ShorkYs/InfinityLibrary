@@ -1,3 +1,5 @@
+> **3.0 update:** active planning now uses neighborhood constraint search rather than the older sibling beam search described below. See [BUILDER.md](BUILDER.md#generator). Shared planes, frontier checks, queued placement and dead-end behavior remain applicable.
+
 # Room planning, dead ends and variant doors — 2.5
 
 ## Shared wall planes (2.5.1)

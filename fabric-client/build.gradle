@@ -1,0 +1,8 @@
+plugins { id 'net.fabricmc.fabric-loom' version '1.19.4' }
+group='com.infinitylibrary'
+version='3.0.0'
+loom { splitEnvironmentSourceSets(); mods { infinitylibrary_builder { sourceSet sourceSets.main; sourceSet sourceSets.client } } }
+dependencies { minecraft 'com.mojang:minecraft:26.3'; implementation 'net.fabricmc:fabric-loader:0.20.1'; implementation 'net.fabricmc.fabric-api:fabric-api:0.166.2+26.3' }
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar() }
+tasks.withType(JavaCompile).configureEach { options.release=25 }
+processResources { inputs.property('version',project.version); filesMatching('fabric.mod.json') { expand(version:project.version) } }

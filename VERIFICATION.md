@@ -1,3 +1,11 @@
+# Version 3.0 verification
+
+- Server Java 25 / Paper 26.3 build 253: build succeeded; **117 JUnit tests** passed.
+- Disposable Paper server: **219 integration assertions** passed, including exploration expansion, queued recovery, shared doorway planes, frontier protection, exact/category and packed props, Diversity topology/persistence, native personal/shared book edits, temporary-item payment protection, automatic bookshelf stocking, admin companion handshake/denial, unified engine continuity, two-click room/reading region staging, undo/redo, apply and region YAML round-trip.
+- Fabric 26.3 / Loader 0.20.1 / API 0.166.2+26.3: client build passed. Actual modded client launched under a virtual display with a software Vulkan renderer, joined a disposable Paper server, received the catalog and opened its custom builder screen.
+
+The server harness uses proxy players for player events/inventory and a real Paper world. This is not a full multiplayer or GPU compatibility test. The search is deliberately bounded and cannot prove a globally optimal layout. Back up your library and try this major update on a copy first.
+
 # Version 2.6.0 verification — 2026-11-17
 
 Target: Paper Minecraft 26.3 build 253 (`63e41db`), Java 25.0.5, Gradle 9.2.1.

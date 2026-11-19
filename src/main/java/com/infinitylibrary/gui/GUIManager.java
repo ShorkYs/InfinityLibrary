@@ -21,6 +21,8 @@ public class GUIManager {
     private final Map<UUID, String> selectedRoom = new ConcurrentHashMap<>();
     public GUIManager(InfinityLibraryPlugin plugin) { this.plugin = plugin; }
 
+    public void openBuilderTools(Player p){if(!p.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Builder permission required.");LibraryMenu m=new LibraryMenu(p,LibraryMenu.Screen.BUILDER_TOOLS,27,"Library • Builder tools");int slot=0;for(String tool:com.infinitylibrary.builder.AuthoringManager.TOOLS){m.entry(slot,tool);plugin.getBookWritingManager().icon(m.getInventory(),slot++,Material.BLAZE_ROD,tool,"Left: corner 1 · Right: corner 2");}plugin.getBookWritingManager().icon(m.getInventory(),18,Material.ARROW,"Undo");plugin.getBookWritingManager().icon(m.getInventory(),20,Material.ARROW,"Redo");plugin.getBookWritingManager().icon(m.getInventory(),22,Material.BARRIER,"Cancel unfinished selection");p.openInventory(m.getInventory());}
+    public void builderAction(Player p,LibraryMenu menu,int slot){if(slot==18)plugin.getAuthoringManager().undo(p,false);else if(slot==20)plugin.getAuthoringManager().undo(p,true);else if(slot==22)plugin.getAuthoringManager().cancel(p);else if(menu.entry(slot)!=null){plugin.getAuthoringManager().activate(p,menu.entry(slot));p.closeInventory();}}
     public void openMainMenu(Player player) {
         if (!player.hasPermission("infinitylibrary.command")) throw new IllegalArgumentException("Missing permission infinitylibrary.command");
         plugin.getBookWritingManager().invalidate(player);plugin.getManagedDialogs().invalidate(player);
@@ -42,6 +44,7 @@ public class GUIManager {
         writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
         writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
         if(player.hasPermission("infinitylibrary.admin")) {
+            writer.icon(inv,38,Material.BLAZE_ROD,"§6Builder tools","§7Left/right selection, undo and Fabric companion");
             writer.icon(inv,42,Material.PRISMARINE_SHARD,"§6Room Diversity","§7Capture a target and its same-size alternatives","§7Optional variant doors: /il diversityconnection");
             writer.icon(inv,44,Material.ARMOR_STAND,"§6Room props","§7Reusable props and placeholder area wand");
             writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
@@ -64,6 +67,7 @@ public class GUIManager {
             case 32 -> openLecternBookEditor(player);
             case 34 -> openBookshelfReturn(player,null);
             case 40 -> { boolean given=plugin.getBookStorageManager().giveDailyWritableBook(player); player.sendMessage(given?"Book & quill added to your inventory.":"Unable to claim: check your daily limit and inventory space."); openMainMenu(player); }
+            case 38 -> openBuilderTools(player);
             case 42 -> {if(player.hasPermission("infinitylibrary.admin")){plugin.getBookStorageManager().returnItem(player,plugin.getDiversityManager().wand());player.sendMessage("Select the room, then /il diversitymode <area> <variant>. Click target corners, then source corners.");}}
             case 44 -> { if(player.hasPermission("infinitylibrary.admin")) plugin.getPropManager().browser(player); }
             case 46 -> { if(player.hasPermission("infinitylibrary.admin")) openRoomEditor(player); }

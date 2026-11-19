@@ -59,12 +59,13 @@ public final class BookWritingManager {
     }
     public void invalidate(Player player) { dialogTokens.remove(player.getUniqueId()); }
     public void open(Player player) {
+        if(plugin.getNativeBookEditor()!=null)plugin.getNativeBookEditor().cleanup(player);
         invalidate(player); BookDraft d=draft(player.getUniqueId());
         LibraryMenu menu=new LibraryMenu(player,LibraryMenu.Screen.WRITER,54,"Library • Writing Desk");
         Inventory inv=menu.getInventory(); fill(inv);
         icon(inv,4,Material.WRITABLE_BOOK,"§d"+(d.title().isBlank()?"Your manuscript":d.title()),"§7By "+player.getName(),"§7"+(d.publicBook()?"Public":"Private")+" · "+d.category());
         icon(inv,11,Material.NAME_TAG,"§bBook details","§7Title, category, tags and visibility");
-        icon(inv,13,Material.FEATHER,"§aWrite this page","§7Open a multiline text editor","§7Up to 1,024 characters per page");
+        icon(inv,13,Material.FEATHER,"§aWrite in Book & Quill","§7Temporary native book editor","§7Right-click it, then Done to save");
         icon(inv,15,Material.WRITABLE_BOOK,"§bImport held book & quill","§7Copies its pages into this manuscript","§eOnly available while the manuscript is empty");
         icon(inv,20,Material.ARROW,"§ePrevious page");
         String preview=d.page().replace('\n',' '); if(preview.length()>60) preview=preview.substring(0,60)+"…";
@@ -138,7 +139,7 @@ public final class BookWritingManager {
         int payment=-1;
         for(int i=0;i<p.getInventory().getStorageContents().length;i++) {
             ItemStack item=p.getInventory().getItem(i);
-            if(item==null||item.getType()!=Material.WRITABLE_BOOK) continue;
+            if(item==null||item.getType()!=Material.WRITABLE_BOOK||plugin.getNativeBookEditor().temporary(item)) continue;
             if(item.getItemMeta() instanceof BookMeta m && m.getPages().stream().anyMatch(text -> !text.isBlank())) continue;
             String owner=item.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin,"book_owner_uuid"),PersistentDataType.STRING);
             if(owner==null||owner.equals(p.getUniqueId().toString())) { payment=i; break; }
@@ -152,15 +153,7 @@ public final class BookWritingManager {
         if(!publish) plugin.getBookStorageManager().returnItem(p,result);
         p.sendMessage(Component.text(publish?"Book published. Your manuscript is still saved.":"Signed copy added to your inventory. Your manuscript is still saved."));
     }
-    public void pageDialog(Player p) {
-        BookDraft d=draft(p.getUniqueId()); int page=d.current();
-        showDialog(p,"Write page "+(page+1),List.of(DialogInput.text("page",Component.text("Page text"))
-            .width(300).initial(d.page()).maxLength(BookDraft.MAX_PAGE_LENGTH)
-            .multiline(TextDialogInput.MultilineOptions.create(64,180)).build()),r -> {
-                if(d.current()!=page) throw new IllegalArgumentException("The selected page changed. Open it again.");
-                d.page(Objects.requireNonNullElse(r.getText("page"),"")); save(); open(p);
-            });
-    }
+    public void pageDialog(Player p) {plugin.getNativeBookEditor().personal(p);}
     public void detailsDialog(Player p) {
         BookDraft d=draft(p.getUniqueId());
         showDialog(p,"Book details",List.of(

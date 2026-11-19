@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.0
+
+Unified neighborhood generation, consistent authoring wands with undo/redo, saved reading/shelf regions, optional Fabric 26.3 builder editor and outlines, native Book & Quill writing and automatic chiseled bookshelf stocking. See [BUILDER.md](BUILDER.md) and [CHANGELOG-3.0.md](CHANGELOG-3.0.md).
+
 ## 2.6.0
 
 - Added admin client-only room previews with rotation/mirror controls, legacy variations,

@@ -98,11 +98,16 @@ public class RoomManager {
     public void setRoomType(String id,RoomType type) {
         Room old=getActive(id).orElseThrow(() -> new IllegalArgumentException("Active room not found: "+id));
         if(old.type()==RoomType.STARTING&&type!=RoomType.STARTING&&id.equals(activeStartId()))throw new IllegalArgumentException("Select another active STARTING room before changing this room's type.");
-        Room next=new Room(old.id(),type,old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),old.diversityAreas());
+        Room next=new Room(old.id(),type,old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),old.diversityAreas(),old.regions());
         rooms.put(id,next);try{save();}catch(RuntimeException e){rooms.put(id,old);throw e;}
         if(type==RoomType.STARTING)chooseStart(id);else plugin.getGenerationEngine().replanFutureRooms();
     }
 
+    public Runnable checkpoint(Player p){UUID id=p.getUniqueId();Vector3i a=pos1.get(id),b=pos2.get(id);UUID w=selectionWorld.get(id);return ()->{restore(pos1,id,a);restore(pos2,id,b);restore(selectionWorld,id,w);};}
+    private static <T> void restore(Map<UUID,T> map,UUID id,T value){if(value==null)map.remove(id);else map.put(id,value);}
+    public Optional<Vector3i> point1(Player p){return Optional.ofNullable(pos1.get(p.getUniqueId()));}
+    public Optional<Vector3i> point2(Player p){return Optional.ofNullable(pos2.get(p.getUniqueId()));}
+    public void clearSelection(Player p){pos1.remove(p.getUniqueId());pos2.remove(p.getUniqueId());selectionWorld.remove(p.getUniqueId());}
     public void setPos1(Player p) { setPos1(p, p.getLocation()); }
     public void setPos2(Player p) { setPos2(p, p.getLocation()); }
     public void setPos1(Player p, Location location) { checkSelectionWorld(p, location); pos1.put(p.getUniqueId(), Vector3i.from(location)); }
@@ -132,7 +137,7 @@ public class RoomManager {
     public Room capture(Player player, String id, RoomType type, List<ConnectionPoint> connections) {
         if(id.startsWith("builtin_"))throw new IllegalArgumentException("Choose a custom ID; built-in IDs are reserved. Use /il roomtype to change a saved room role.");
         if (!id.matches("[a-z0-9_-]{1,64}")) throw new IllegalArgumentException("Room ID must use 1-64 lowercase letters, digits, underscores or hyphens.");
-        if (plugin.getGenerationEngine().usesRoom(id)) throw new IllegalArgumentException("This template is already placed. Save under a new ID to preserve existing connections.");
+        if (plugin.isRoomInUse(id)) throw new IllegalArgumentException("This template is already placed. Save under a new ID to preserve existing connections.");
         if (!player.getWorld().getUID().equals(selectionWorld.get(player.getUniqueId()))) throw new IllegalArgumentException("Select both corners in your current world.");
         Vector3i a = pos1.get(player.getUniqueId()), b = pos2.get(player.getUniqueId());
         if (a == null || b == null) throw new IllegalArgumentException("Set both selection positions first");
@@ -155,7 +160,7 @@ public class RoomManager {
                 blocks.add(new RoomBlock(new Vector3i(x - minX, y - minY, z - minZ), block.getBlockData().getAsString()));
             }
         }
-        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas,plugin.getDiversityManager().staged(player));
+        Room room = new Room(id, type, new Vector3i(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1), connections, blocks, plugin.getSelectionManager().stagedVariations(player), 100.0,areas,plugin.getDiversityManager().staged(player),plugin.getAuthoringManager()==null?List.of():plugin.getAuthoringManager().regions(player));
         Room previous=rooms.put(id,room);
         try{save();}catch(RuntimeException e){if(previous==null)rooms.remove(id);else rooms.put(id,previous);throw e;}
         if(type==RoomType.STARTING)chooseStart(id);
@@ -184,7 +189,7 @@ public class RoomManager {
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
         List<VariationArea> merged = new ArrayList<>(existing.variations());
         merged.addAll(additions);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance(),existing.propAreas(),existing.diversityAreas());
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), merged, existing.spawnChance(),existing.propAreas(),existing.diversityAreas(),existing.regions());
         rooms.put(roomId, updated);
         save();
     }
@@ -193,7 +198,7 @@ public class RoomManager {
         if (!Double.isFinite(chance) || chance < 0 || chance > 100) throw new IllegalArgumentException("Chance must be finite and between 0 and 100.");
         Room existing = rooms.get(roomId);
         if (existing == null) throw new IllegalArgumentException("Room not found: " + roomId);
-        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance,existing.propAreas(),existing.diversityAreas());
+        Room updated = new Room(existing.id(), existing.type(), existing.size(), existing.connections(), existing.blocks(), existing.variations(), chance,existing.propAreas(),existing.diversityAreas(),existing.regions());
         rooms.put(roomId, updated);
         save();
     }
@@ -202,7 +207,7 @@ public class RoomManager {
         Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found: "+roomId));
         if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing prop areas.");
         Room next=new Room(old.id(),old.type(),old.size(),old.connections(),
-            old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas,old.diversityAreas());
+            old.blocks().stream().filter(b -> areas.stream().noneMatch(a -> a.contains(b.position()))).toList(),old.variations(),old.spawnChance(),areas,old.diversityAreas(),old.regions());
         rooms.put(roomId,next);
         try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}
         plugin.getGenerationEngine().replanFutureRooms();
@@ -213,14 +218,14 @@ public class RoomManager {
         if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing variations.");
         List<VariationArea> remaining=old.variations().stream().filter(v -> !v.id().equals(variationId)).toList();
         if(remaining.size()==old.variations().size())throw new IllegalArgumentException("Legacy variation not found");
-        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),remaining,old.spawnChance(),old.propAreas(),old.diversityAreas());
+        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),remaining,old.spawnChance(),old.propAreas(),old.diversityAreas(),old.regions());
         rooms.put(roomId,next);try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}plugin.getGenerationEngine().replanFutureRooms();
     }
 
     public void updateDiversity(String roomId,List<com.infinitylibrary.diversity.DiversityArea> areas) {
         Room old=getActive(roomId).orElseThrow(() -> new IllegalArgumentException("Active room not found"));
         if(plugin.getGenerationEngine().queuedBlocks()>0)throw new IllegalArgumentException("Wait for construction to finish before editing Diversity.");
-        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),areas);
+        Room next=new Room(old.id(),old.type(),old.size(),old.connections(),old.blocks(),old.variations(),old.spawnChance(),old.propAreas(),areas,old.regions());
         rooms.put(roomId,next);try{save();}catch(RuntimeException e){rooms.put(roomId,old);throw e;}plugin.getGenerationEngine().replanFutureRooms();
     }
 
