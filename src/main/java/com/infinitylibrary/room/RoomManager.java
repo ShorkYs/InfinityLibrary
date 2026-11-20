@@ -134,6 +134,14 @@ public class RoomManager {
 
     public record SelectionBounds(Vector3i min, Vector3i max) {}
 
+    public Room saveVisualTemplate(Room room){
+        String id=room.id();if(!id.matches("[a-z0-9_-]{1,64}")||id.startsWith("builtin_"))throw new IllegalArgumentException("Choose a custom room ID (built-ins are protected).");
+        if(plugin.isRoomInUse(id))throw new IllegalArgumentException("This template is already placed. Save under a new ID.");
+        if(archivedIds().contains(id))throw new IllegalArgumentException("Restore or choose another archived room ID first.");
+        if(id.equals(activeStartId())&&room.type()!=RoomType.STARTING)throw new IllegalArgumentException("Choose another active STARTING room before changing this template type.");
+        room.validate();Room old=rooms.put(id,room);try{save();}catch(RuntimeException ex){if(old==null)rooms.remove(id);else rooms.put(id,old);throw ex;}plugin.getGenerationEngine().replanFutureRooms();return room;
+    }
+
     public Room capture(Player player, String id, RoomType type, List<ConnectionPoint> connections) {
         if(id.startsWith("builtin_"))throw new IllegalArgumentException("Choose a custom ID; built-in IDs are reserved. Use /il roomtype to change a saved room role.");
         if (!id.matches("[a-z0-9_-]{1,64}")) throw new IllegalArgumentException("Room ID must use 1-64 lowercase letters, digits, underscores or hyphens.");

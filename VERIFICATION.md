@@ -1,3 +1,11 @@
+# Version 3.1 verification
+
+- Java 25 / Paper 26.3 build 253: plugin build succeeded; **126 JUnit tests** passed. New tests cover immutable metadata-preserving area edits, bounds/door clearance, even doorway anchors, deletion safety, Diversity source preservation and brush replacement.
+- Disposable Paper server: **230 integration assertions** passed. Studio checks cover admin transport, bounded model chunks, isolated voxel painting, undo, compatible shared-plane neighbor alignment, automatic refresh after area edits, durable custom saves, stale-draft rejection and built-in protection. Previous generation, authoring, books, shelving, community and navigation checks remain in the harness.
+- Actual Fabric 26.3 client: launched and joined Paper, opened Studio, loaded a complete room model, displayed connected rooms, painted a slice brush, created a reading area, and dragged it to new coordinates and dimensions confirmed by the server. The interface was inspected at the default window size and a larger 1280×800 window using a software Vulkan renderer.
+
+The integration harness uses proxy players for many event/inventory assertions and real Paper worlds. Its shelf test clears its own disposable shelf and increases only the fixture's scan budgets to accommodate the many chunks built by the suite; production bookshelf code is unchanged. This is not a full multiplayer/GPU compatibility or large-map performance test. Studio uses colored voxels, bounded 3D drawing and editable slices; see [STUDIO.md](STUDIO.md) for limitations. Back up your library and test a major update on a copy first.
+
 # Version 3.0 verification
 
 - Server Java 25 / Paper 26.3 build 253: build succeeded; **117 JUnit tests** passed.

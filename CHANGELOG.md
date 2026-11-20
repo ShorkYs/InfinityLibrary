@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0
+
+- Added a docked visual Studio workspace with room/area outliner, orbitable cutaway voxel view and editable orthographic slices.
+- Added server-owned room drafts, eight-step undo/redo, area creation/movement/resizing/deletion, numeric properties, categories and bounded block painting/erasing.
+- Added automatically refreshed adjacent-room preview with compatible-door alignment, rotation/reflection alternatives and shared-plane collision checks.
+- Added bounded model/area streaming, draft revision checks, protected durable saves and stale-transfer rejection. Existing wands and actual-block previews remain accessible.
+- See [STUDIO.md](STUDIO.md) for controls and limitations.
+
 ## 3.0.0
 
 Unified neighborhood generation, consistent authoring wands with undo/redo, saved reading/shelf regions, optional Fabric 26.3 builder editor and outlines, native Book & Quill writing and automatic chiseled bookshelf stocking. See [BUILDER.md](BUILDER.md) and [CHANGELOG-3.0.md](CHANGELOG-3.0.md).

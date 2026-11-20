@@ -1,3 +1,5 @@
+> **3.1:** B now opens the visual Studio workspace. See [STUDIO.md](STUDIO.md). The wand/settings/live-preview screen described here is available through **Wands / live**. Install matching 3.1 plugin and companion JARs.
+
 # Infinity Library Builder 3.0
 
 ## Installation
