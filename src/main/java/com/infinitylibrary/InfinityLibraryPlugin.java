@@ -24,6 +24,8 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     private com.infinitylibrary.community.PreviewManager previewManager;
     private com.infinitylibrary.builder.AuthoringManager authoringManager;
     private com.infinitylibrary.builder.BuilderBridge builderBridge;
+    private com.infinitylibrary.rentals.RentalManager rentalManager;
+    public com.infinitylibrary.rentals.RentalManager getRentalManager(){return rentalManager;}
     private BookListener bookListener;
     private RoomManager roomManager;
     private GenerationEngine generationEngine;
@@ -48,6 +50,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         collaborationManager=new com.infinitylibrary.community.CollaborationManager(this);
         readingManager=new com.infinitylibrary.community.ReadingManager(this);
         noticeboardManager=new com.infinitylibrary.community.NoticeboardManager(this);
+        rentalManager=new com.infinitylibrary.rentals.RentalManager(this);
         navigationManager=new com.infinitylibrary.community.NavigationManager(this);
         previewManager=new com.infinitylibrary.community.PreviewManager(this);
         nativeBookEditor=new com.infinitylibrary.writing.NativeBookEditor(this);getServer().getPluginManager().registerEvents(nativeBookEditor,this);
@@ -87,7 +90,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         roomManager.load();
         bookStorageManager.load();
         generationEngine.start();
-        collaborationManager.load();readingManager.load();noticeboardManager.load();navigationManager.load();
+        rentalManager.load();collaborationManager.load();readingManager.load();noticeboardManager.load();navigationManager.load();
     }
 
     public com.infinitylibrary.community.ManagedDialogs getManagedDialogs(){return managedDialogs;}

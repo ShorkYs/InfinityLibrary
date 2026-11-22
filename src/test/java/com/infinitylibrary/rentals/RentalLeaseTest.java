@@ -1,0 +1,6 @@
+package com.infinitylibrary.rentals;
+import org.junit.jupiter.api.Test;import java.util.*;import static org.junit.jupiter.api.Assertions.*;
+class RentalLeaseTest {
+ @Test void expiryRevokesInvitedAccessButPreservesOwnerNotes(){UUID owner=UUID.randomUUID(),editor=UUID.randomUUID();var lease=new RentalManager.Lease(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),owner,100,Set.of(editor),List.of("A private draft note"));assertTrue(lease.access(editor,99));assertFalse(lease.access(editor,100));assertTrue(lease.access(owner,100));assertEquals(List.of("A private draft note"),lease.notes());assertFalse(lease.access(UUID.randomUUID(),99));}
+ @Test void collectionsAreImmutableAndNotesAreBounded(){List<String> notes=new ArrayList<>(List.of("text"));var lease=new RentalManager.Lease(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),100,Set.of(),notes);notes.clear();assertEquals(List.of("text"),lease.notes());assertThrows(UnsupportedOperationException.class,()->lease.notes().clear());assertThrows(IllegalArgumentException.class,()->new RentalManager.Lease(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),100,Set.of(),List.of("a".repeat(4001))));}
+}

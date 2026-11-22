@@ -1,3 +1,9 @@
+# 4.0 development snapshot verification
+
+140 unit tests and 242 disposable Paper 26.3 server assertions passed. New runtime checks cover player/builder menu separation and permissions, stable/private/persisted room favorites, room-role parsing, free rental claims, nonmember note denial, invited note access, and release/reload retaining owner notes while revoking editor access. Unit checks include whole-plan validation, budget outcomes, district journal restart/order/stale-write safety, rental expiry semantics and bounded typography.
+
+The district journal/search tests do not establish that the new generator is active: it is not yet wired into live placement. This snapshot still uses the previous generator. Rentable rooms do not yet provide physical protection or a book vault. This is a development milestone, not the complete requested rebuild.
+
 # Version 3.1 verification
 
 - Java 25 / Paper 26.3 build 253: plugin build succeeded; **126 JUnit tests** passed. New tests cover immutable metadata-preserving area edits, bounds/door clearance, even doorway anchors, deletion safety, Diversity source preservation and brush replacement.

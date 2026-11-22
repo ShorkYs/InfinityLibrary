@@ -1,3 +1,17 @@
+# Server-only rebuild — 4.0 development snapshot
+
+This branch contains work in progress, not the completed replacement plugin. The stable 3.1 release is on `main`. Fabric work is shelved.
+
+Implemented here: separate player/builder menus, generated-room favorites scoped to library IDs, current-room addresses, rentable/public-writing roles, free timed claims with invited private notes and retained archives, and basic writing markup tools. `/il builder` opens the builder menu; `/il rent` lists rental commands.
+
+The new district model, bounded whole-plan search and durable construction journal are implemented and unit tested, but **the replacement district generator is not wired into live generation**. This snapshot still runs the previous generator. Rental book vaults/physical protection, full workspace GUIs, migration and the remaining feature rebuilds are unfinished. Do not treat this snapshot as the requested finished rewrite.
+
+See [REBUILD-4.0.md](REBUILD-4.0.md) for the design and release gates. Rental notes are saved to `rentals.yml`; claim expiry/release retains owner records and removes invited-editor access. The current chat view abbreviates long notes; full text remains stored. A claim is a workspace entitlement; physical room access protection and book storage are not implemented in this snapshot.
+
+---
+
+## Previous stable release documentation
+
 # Infinity Library 3.1
 
 A procedural library plugin for **Paper Minecraft Java Edition 26.3**, requiring

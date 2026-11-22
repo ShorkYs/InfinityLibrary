@@ -1,0 +1,8 @@
+package com.infinitylibrary.nextgen;
+import org.junit.jupiter.api.Test;import org.junit.jupiter.api.io.TempDir;import java.nio.file.Path;import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static com.infinitylibrary.nextgen.DistrictPlan.*;
+class DistrictJournalTest {
+ @TempDir Path dir;
+ DistrictPlan plan(UUID a,UUID b){var opening=Set.of(new Point(4,1,2));var one=new Room(a,"entrance",Role.ENTRANCE,new Volume(new Point(0,0,0),new Point(5,5,5)),List.of(new Door("east",Facing.EAST,0,opening)));var two=new Room(b,"reading",Role.READING,new Volume(new Point(4,0,0),new Point(5,5,5)),List.of(new Door("west",Facing.WEST,0,opening)));return new DistrictPlan(List.of(one,two),List.of(new Link(new Socket(a,"east"),new Socket(b,"west"))),Set.of());}
+ @Test void reservationsAndProgressSurviveReload(){UUID a=UUID.randomUUID(),b=UUID.randomUUID(),id=UUID.randomUUID();Path file=dir.resolve("districts.yml");var journal=new DistrictJournal(file);journal.reserve(id,plan(a,b));assertTrue(journal.get(id).ready(a));assertFalse(journal.get(id).ready(b));journal.completedRoom(id,0,a);var restored=new DistrictJournal(file);assertTrue(restored.get(id).ready(b));assertEquals(Set.of(a),restored.get(id).built());restored.completedRoom(id,1,b);assertTrue(new DistrictJournal(file).get(id).complete());}
+ @Test void staleOrDisconnectedCommitsDoNotAdvanceJournal(){UUID a=UUID.randomUUID(),b=UUID.randomUUID(),id=UUID.randomUUID();var journal=new DistrictJournal(dir.resolve("districts.yml"));journal.reserve(id,plan(a,b));assertThrows(IllegalArgumentException.class,()->journal.completedRoom(id,0,b));journal.completedRoom(id,0,a);assertThrows(IllegalArgumentException.class,()->journal.completedRoom(id,0,b));assertEquals(Set.of(a),journal.get(id).built());}
+}

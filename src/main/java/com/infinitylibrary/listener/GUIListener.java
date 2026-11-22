@@ -25,7 +25,8 @@ public class GUIListener implements Listener {
             plugin.getServer().getScheduler().runTask(plugin,() -> {
                 if(!p.isOnline() || !p.hasPermission("infinitylibrary.command") || p.getOpenInventory().getTopInventory().getHolder()!=menu) return;
                 try {
-                    if(menu.screen()==LibraryMenu.Screen.BUILDER_TOOLS)plugin.getGuiManager().builderAction(p,menu,slot);
+                    if(menu.screen()==LibraryMenu.Screen.BUILDER_HOME)plugin.getGuiManager().builderMenuAction(p,slot);
+                    else if(menu.screen()==LibraryMenu.Screen.BUILDER_TOOLS)plugin.getGuiManager().builderAction(p,menu,slot);
                     else if(menu.screen()==LibraryMenu.Screen.MAIN) plugin.getGuiManager().mainMenuAction(p,slot);
                     else if(java.util.Set.of(LibraryMenu.Screen.ROOMS,LibraryMenu.Screen.ROOM_DETAILS,LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS).contains(menu.screen())) plugin.getGuiManager().roomMenuAction(p,menu,slot,e.getClick()==ClickType.SHIFT_RIGHT);
                     else if(menu.screen()==LibraryMenu.Screen.PROPS) plugin.getPropManager().menuAction(p,slot);

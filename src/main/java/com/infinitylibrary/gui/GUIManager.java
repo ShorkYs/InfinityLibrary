@@ -35,6 +35,9 @@ public class GUIManager {
         writer.icon(inv,12,Material.BOOK,"§bBook collection","§7Read books with saved page progress");
         writer.icon(inv,14,Material.CLOCK,"§aContinue reading","§7Your saved pages and finished books");
         writer.icon(inv,16,Material.MAP,"§bParticle navigation","§7Walking trails and personal bookmarks");
+        writer.icon(inv,18,Material.OAK_DOOR,"Rental workspace","/il rent claim, renew, invite and private notes");
+        writer.icon(inv,26,Material.FILLED_MAP,"Where am I?","Show this generated room address");
+        writer.icon(inv,36,Material.NETHER_STAR,"Favorite rooms","Right-click a generated room to favorite it");
         writer.icon(inv,28,Material.WRITABLE_BOOK,"§dCollaborative books","§7Shared manuscripts with invited editors");
         writer.icon(inv,20,Material.WRITABLE_BOOK,"§aWriting desk","§7Write pages, set a title and preview","§7Continue your saved manuscript");
         writer.icon(inv,22,Material.COMPASS,"§bSearch books","§7Search title, author, category or tags");
@@ -43,13 +46,6 @@ public class GUIManager {
         writer.icon(inv,32,Material.LECTERN,"§aSubmit a signed book","§7Open the existing book submission editor");
         writer.icon(inv,34,Material.CHISELED_BOOKSHELF,"§aReturn a book","§7Rate and return a library book");
         writer.icon(inv,40,Material.FEATHER,"§eClaim daily book & quill","§7Used when signing or publishing a manuscript");
-        if(player.hasPermission("infinitylibrary.admin")) {
-            writer.icon(inv,38,Material.BLAZE_ROD,"§6Builder tools","§7Left/right selection, undo and Fabric companion");
-            writer.icon(inv,42,Material.PRISMARINE_SHARD,"§6Room Diversity","§7Capture a target and its same-size alternatives","§7Optional variant doors: /il diversityconnection");
-            writer.icon(inv,44,Material.ARMOR_STAND,"§6Room props","§7Reusable props and placeholder area wand");
-            writer.icon(inv,46,Material.BRICKS,"§6Room templates","§7Inspect saved rooms and connections");
-            writer.icon(inv,48,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"§aResume expansion":"§ePause expansion","§7Queued block placement continues");
-        }
         writer.icon(inv,49,Material.BARRIER,"§cClose menu");
         player.openInventory(inv);
     }
@@ -59,6 +55,9 @@ public class GUIManager {
             case 12 -> plugin.getReadingManager().browser(player,0,false);
             case 14 -> plugin.getReadingManager().browser(player,0,true);
             case 16 -> plugin.getNavigationManager().browser(player);
+            case 18 -> plugin.getRentalManager().command(player,new String[]{"rent","help"});
+            case 26 -> plugin.getNavigationManager().currentRoom(player);
+            case 36 -> plugin.getNavigationManager().rooms(player,0);
             case 28 -> plugin.getCollaborationManager().browser(player,0);
             case 20 -> plugin.getBookWritingManager().open(player);
             case 22 -> plugin.getBookWritingManager().searchDialog(player);
@@ -67,13 +66,23 @@ public class GUIManager {
             case 32 -> openLecternBookEditor(player);
             case 34 -> openBookshelfReturn(player,null);
             case 40 -> { boolean given=plugin.getBookStorageManager().giveDailyWritableBook(player); player.sendMessage(given?"Book & quill added to your inventory.":"Unable to claim: check your daily limit and inventory space."); openMainMenu(player); }
-            case 38 -> openBuilderTools(player);
-            case 42 -> {if(player.hasPermission("infinitylibrary.admin")){plugin.getBookStorageManager().returnItem(player,plugin.getDiversityManager().wand());player.sendMessage("Select the room, then /il diversitymode <area> <variant>. Click target corners, then source corners.");}}
-            case 44 -> { if(player.hasPermission("infinitylibrary.admin")) plugin.getPropManager().browser(player); }
-            case 46 -> { if(player.hasPermission("infinitylibrary.admin")) openRoomEditor(player); }
-            case 48 -> { if(player.hasPermission("infinitylibrary.admin")) { var engine=plugin.getGenerationEngine(); engine.setPaused(!engine.isPaused()); openMainMenu(player); } }
             case 49 -> player.closeInventory();
         }
+    }
+
+    public void openBuilderMenu(Player p){
+        if(!p.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Builder permission required.");
+        LibraryMenu m=new LibraryMenu(p,LibraryMenu.Screen.BUILDER_HOME,27,"Infinity Library • Builder");var w=plugin.getBookWritingManager();
+        w.icon(m.getInventory(),10,Material.BLAZE_ROD,"Selection tools","Room, doors, regions, undo and cancel");
+        w.icon(m.getInventory(),12,Material.BRICKS,"Room catalog","Capture and configure room roles");
+        w.icon(m.getInventory(),14,Material.ARMOR_STAND,"Decoration catalog","Categories and exact/packed areas");
+        w.icon(m.getInventory(),16,Material.PRISMARINE_SHARD,"Room Diversity","Same-size variations and variant doors");
+        w.icon(m.getInventory(),20,Material.REDSTONE_TORCH,plugin.getGenerationEngine().isPaused()?"Resume exploration":"Pause exploration");
+        w.icon(m.getInventory(),22,Material.CHEST,"Player menu");p.openInventory(m.getInventory());
+    }
+    public void builderMenuAction(Player p,int slot){
+        if(!p.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Builder permission required.");
+        switch(slot){case 10->openBuilderTools(p);case 12->openRoomEditor(p);case 14->plugin.getPropManager().browser(p);case 16->{plugin.getBookStorageManager().returnItem(p,plugin.getDiversityManager().wand());p.closeInventory();p.sendMessage("Select the room, then /il diversitymode <area> <variant>.");}case 20->{var e=plugin.getGenerationEngine();e.setPaused(!e.isPaused());openBuilderMenu(p);}case 22->openMainMenu(p);}
     }
 
     public void openStats(Player player) {
@@ -204,7 +213,7 @@ public class GUIManager {
         inv.setItem(18,item(Material.NETHER_STAR,"&aUse As STARTING Room",List.of("&7Sets STARTING type and selects it.","&7Takes effect on the next library reset.","&7Never used for random expansion.")));
         inv.setItem(20,item(Material.BRICKS,"&eUse As Expansion Base",List.of("&7Leaves the STARTING choice unchanged.","&7STARTING rooms cannot be a base.")));
         inv.setItem(22,item(Material.ARROW,"&eRoom List",List.of()));
-        inv.setItem(24,item(Material.NAME_TAG,"&eChange Room Type",List.of("&e/il roomtype "+roomId+" <type>","&7STARTING, FILLER, BOOK or READ")));
+        inv.setItem(24,item(Material.NAME_TAG,"&eChange Room Type",List.of("&e/il roomtype "+roomId+" <type>","&7STARTING, FILLER, READING, RENTABLE or PUBLIC_WRITING")));
         inv.setItem(25,item(Material.PRISMARINE_SHARD,"&dRoom Diversity",List.of("&e/il diversityload "+roomId,"&e/il applydiversity "+roomId,"&7Optional doors: /il diversityconnection")));
         player.openInventory(inv);
     }
@@ -212,7 +221,7 @@ public class GUIManager {
         if(!p.hasPermission("infinitylibrary.admin"))throw new IllegalArgumentException("Missing permission infinitylibrary.admin");
         var manager=plugin.getRoomManager();
         if(menu.screen()==LibraryMenu.Screen.ROOMS) {
-            if(slot==10){p.closeInventory();p.sendMessage("Select bounds and exits, then /il saveroom <id> <STARTING|FILLER|BOOK|READ>. STARTING is selected for the next reset.");return;}
+            if(slot==10){p.closeInventory();p.sendMessage("Select bounds and exits, then /il saveroom <id> <STARTING|FILLER|READING|RENTABLE|PUBLIC_WRITING>. STARTING is selected for the next reset.");return;}
             if(slot==12){openDefaultRemoval(p);return;}
             if(slot==14){p.sendMessage("Restore with /il restoreroom <id>. Archived: "+String.join(", ",manager.archivedIds()));return;}
             String id=menu.entry(slot);if(id==null)return;
@@ -229,7 +238,7 @@ public class GUIManager {
                 case 20 -> {manager.chooseBase(id);p.sendMessage("Expansion base selected; the start room is unchanged.");openRoomDetails(p,id);}
                 case 22 -> openRoomEditor(p);
                 case 25 -> {plugin.getBookStorageManager().returnItem(p,plugin.getDiversityManager().wand());p.sendMessage("Select this authoring room, then /il diversityload "+id+" and /il diversityvariant <area> <variant>, or capture a new target/source pair.");}
-                case 24 -> p.sendMessage("/il roomtype "+id+" <STARTING|FILLER|BOOK|READ>");
+                case 24 -> p.sendMessage("/il roomtype "+id+" <STARTING|FILLER|READING|RENTABLE|PUBLIC_WRITING>");
             }
         } else if(menu.screen()==LibraryMenu.Screen.CONFIRM_DEFAULT_ROOMS) {
             if(slot==11){int count=manager.removeDefaults();p.sendMessage("Removed "+count+" default templates from generation/menus. Built rooms remain.");openRoomEditor(p);}

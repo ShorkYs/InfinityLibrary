@@ -1,0 +1,1 @@
+7b1e31c01896a44fa6dc1d9fd601080d6d8c478a0d3612d7078f03990002dab1  InfinityLibraryPlugin-4.0.0-SNAPSHOT.jar
