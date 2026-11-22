@@ -1,10 +1,16 @@
-# Infinity Library 4.0
+# Infinity Library 4.0.1
 
 A server-only procedural library for **Paper Minecraft 26.3**, requiring **Java 25**. Players and builders use ordinary Minecraft menus, dialogs, books and wands. Fabric development is shelved; no client mod is required.
 
-**[Download plugin](downloads/InfinityLibraryPlugin-4.0.0.jar?raw=true)** · **[Download source](downloads/InfinityLibrary-4.0.0-source.zip?raw=true)**
+**[Download plugin](downloads/InfinityLibraryPlugin-4.0.1.jar?raw=true)** · **[Download source](downloads/InfinityLibrary-4.0.1-source.zip?raw=true)**
 
 On GitHub, choose **Download raw file** if a preview opens. Stop the server, replace the old plugin JAR in `plugins/`, and retain the plugin data folder. Start Paper, then use `/il` for the player menu or `/il builder` for the administrator menu.
+
+## Bookshelf restocking fix (4.0.1)
+
+Published and submitted books are queued for automatic delivery. Startup and `/il reload` rescan loaded shelves and restore missing catalog copies. Full shelves leave excess books in the saved collection; new generated rooms, placed shelves and loaded chunks make that space available automatically. Stale full/missing shelf destinations are reassigned, existing contents are preserved, and stocked catalog IDs prevent repeated copies. Uncategorized signed books match `general` shelves. Rental shelves remain separate from public stocking.
+
+Shelf categories still apply: a category-specific shelf requires a matching book; blank or `*` shelves accept all categories. No manual `/il shelves` command is needed. Distant unloaded chunks are stocked when they load; the plugin does not force-load the whole library. Only submitted/published books join the library collection; unfinished personal drafts remain private.
 
 ## What changed
 
@@ -42,4 +48,4 @@ The planner searches a bounded region. Arbitrary template sizes, missing corrido
 
 ## Build
 
-Run `./gradlew build` with Java 25. Output: `build/libs/InfinityLibraryPlugin-4.0.0.jar`. The build runs JUnit tests. The archived `fabric-client/` project and old downloads describe the previous optional companion; they are not part of the 4.0 server release.
+Run `./gradlew build` with Java 25. Output: `build/libs/InfinityLibraryPlugin-4.0.1.jar`. The build runs JUnit tests. The archived `fabric-client/` project and old downloads describe the previous optional companion; they are not part of the 4.0 server release.

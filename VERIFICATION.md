@@ -1,3 +1,13 @@
+# Version 4.0.1 bookshelf recovery fix
+
+Java 25 / Paper Minecraft 26.3 build 253: build succeeded, **149 JUnit tests passed**, and the final release JAR passed **283 disposable Paper integration assertions**.
+
+Twelve additional runtime checks cover full shelves retaining pending books across reload, immediate delivery to new shelf space, reassignment from a full stale destination, preserving unrelated items, automatic reload restocking, unique catalog IDs, remaining overflow using the next shelf, no extra copies in surplus space, uncategorized books on general shelves, tracked direct lectern submissions, and recovering old untagged copies without duplication. The retained rental/private-shelf, generation, navigation, writing and community checks also passed. The shelf fixture cleans up its own added shelves before the independent rental fixture.
+
+Stocking inspects loaded chunks; it never force-loads the whole library. Startup, chunk entry, publication/submission, room construction and reload activate the stocker. Existing valid copies remain assigned; unplaced books remain in `books.yml` until matching space is available. Validation uses proxy player actors with real Paper inventories, block state, scheduler, saves and reloads; this is not a real-client rendering or large-server performance benchmark.
+
+---
+
 # Version 4.0 verification
 
 Target: **Paper Minecraft 26.3 build 253**, Java 25, Gradle 9.2.1.

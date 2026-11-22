@@ -53,6 +53,8 @@ public class BookStorageManager implements org.bukkit.event.Listener {
     private final Set<String> registeredShelves=new LinkedHashSet<>();
     private final Queue<String> scanChunks=new ArrayDeque<>();private final Set<String> queuedChunks=new HashSet<>();
     private int shelfTask=-1,shelfTicks,shelfCursor;
+    private final Queue<String> stockingShelves=new ArrayDeque<>();
+    private final Set<String> queuedStockingShelves=new HashSet<>();
 
 
     public BookStorageManager(InfinityLibraryPlugin plugin) {
@@ -82,6 +84,7 @@ public class BookStorageManager implements org.bukkit.event.Listener {
         if(shelves!=null)for(String key:shelves.getKeys(false))nextCategories.put(key,shelves.getString(key,""));
         books.clear();books.putAll(nextBooks);shelfCategories.clear();shelfCategories.putAll(nextCategories);
         registeredShelves.clear();registeredShelves.addAll(y.getStringList("registered-shelves"));daily=nextDaily;
+        stockingShelves.clear();queuedStockingShelves.clear();if(shelfTask!=-1)requestShelfScan();
     }
 
     private int saveTask = -1;
@@ -146,8 +149,8 @@ public class BookStorageManager implements org.bukkit.event.Listener {
         pdc.set(publicKey, PersistentDataType.BYTE, (byte)(ownership.isPublic() ? 1 : 0));
         stack.setItemMeta(meta);
         String insertedAt = existing.map(StoredBook::insertedAt).orElseGet(() -> Instant.now().toString());
-        books.put(id, new StoredBook(id, contributor.getUniqueId(), contributor.getName(), ownership.ownerUuid(), ownership.ownerName(), ownership.isPublic(), safe(meta.getTitle()), safe(meta.getAuthor()), List.copyOf(meta.getPages()), stack.serialize(), insertedAt, serializeLocation(shelfLocation), safe(pdc.get(categoryKey, PersistentDataType.STRING)), safe(pdc.get(tagsKey, PersistentDataType.STRING)), safe(pdc.get(ratingKey, PersistentDataType.STRING)), safe(pdc.get(commentsKey, PersistentDataType.STRING))));
-        saveAsync();
+        books.put(id, new StoredBook(id, contributor.getUniqueId(), contributor.getName(), ownership.ownerUuid(), ownership.ownerName(), ownership.isPublic(), safe(meta.getTitle()), safe(meta.getAuthor()), List.copyOf(meta.getPages()), stack.serialize(), insertedAt, shelfLocation==null?existing.map(StoredBook::shelfLocation).orElse(""):serializeLocation(shelfLocation), safe(pdc.get(categoryKey, PersistentDataType.STRING)), safe(pdc.get(tagsKey, PersistentDataType.STRING)), safe(pdc.get(ratingKey, PersistentDataType.STRING)), safe(pdc.get(commentsKey, PersistentDataType.STRING))));
+        saveAsync();requestShelfStocking();
     }
 
 
@@ -210,27 +213,21 @@ public class BookStorageManager implements org.bukkit.event.Listener {
         if (!meta.getPersistentDataContainer().has(ownerUuidKey, PersistentDataType.STRING)) tagLibraryBook(meta, player, false);
         saved.setItemMeta(meta);
         applyAverageRatingLore(saved);
+        publishManuscript(player,saved);
         Location shelfLocation = plugin.isLibraryWorld(player.getWorld().getName()) ? placeInNearbyBookshelf(player, saved) : null;
-        recordBook(player, saved, shelfLocation);
         return shelfLocation != null;
     }
 
 
     private Location placeInNearbyBookshelf(Player player, ItemStack book) {
-        int radius = Math.max(0, Math.min(32, plugin.getConfig().getInt("lectern-gui.save-shelf-radius", 16)));
-        Location center = player.getLocation();
-        World world = player.getWorld();
-        for (int y = -radius; y <= radius; y++) for (int x = -radius; x <= radius; x++) for (int z = -radius; z <= radius; z++) {
-            Block block = world.getBlockAt(center.getBlockX() + x, center.getBlockY() + y, center.getBlockZ() + z);
-            if (block.getType() != Material.CHISELED_BOOKSHELF) continue;
-            Inventory inventory = bookshelfInventory(block);
-            if (inventory == null) continue;
-            for (int slot = 0; slot < Math.min(inventory.getSize(), 6); slot++) {
-                ItemStack existing = inventory.getItem(slot);
-                if (existing != null && !existing.getType().isAir()) continue;
-                inventory.setItem(slot, book.clone());
-                return block.getLocation();
-            }
+        String id=book.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING);
+        int radius=Math.max(0,Math.min(32,plugin.getConfig().getInt("lectern-gui.save-shelf-radius",16)));
+        Location center=player.getLocation();World world=player.getWorld();
+        for(int y=-radius;y<=radius;y++)for(int x=-radius;x<=radius;x++)for(int z=-radius;z<=radius;z++){
+            int wx=center.getBlockX()+x,wz=center.getBlockZ()+z;if(!world.isChunkLoaded(wx>>4,wz>>4))continue;
+            Block block=world.getBlockAt(wx,center.getBlockY()+y,wz);if(block.getType()!=Material.CHISELED_BOOKSHELF)continue;
+            populateBookshelf(block);Inventory inv=bookshelfInventory(block);
+            if(inv!=null&&Arrays.stream(inv.getContents()).anyMatch(item->Objects.equals(id,bookId(item))))return block.getLocation();
         }
         return null;
     }
@@ -375,34 +372,72 @@ public class BookStorageManager implements org.bukkit.event.Listener {
         return Optional.ofNullable(list.get(ThreadLocalRandom.current().nextInt(list.size())).toItemStack());
     }
 
+    private String bookId(ItemStack item){return item==null||!item.hasItemMeta()?null:item.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING);}
+    private boolean eligibleShelf(Block block){return block.getType()==Material.CHISELED_BOOKSHELF&&plugin.isLibraryWorld(block.getWorld().getName())&&(plugin.getRentalVaultManager()==null||!plugin.getRentalVaultManager().rental(block.getLocation()));}
+    private String normalizedCategory(String category){return category==null||category.isBlank()?"general":category.strip().toLowerCase(Locale.ROOT);}
+    private boolean categoryMatches(String category,StoredBook book){return category.isBlank()||category.equals("*")||normalizedCategory(category).equals(normalizedCategory(book.category()));}
+    /** Unloaded destinations remain reserved until their chunk can be inspected without force loading. */
+    private boolean hasValidAssignment(StoredBook book){
+        String key=book.shelfLocation();if(key==null||key.isBlank())return false;
+        Location location=deserializeLocation(key);
+        if(location==null){String world=key.split(";",2)[0];return plugin.isLibraryWorld(world);}
+        if(!plugin.isLibraryWorld(location.getWorld().getName()))return false;
+        if(!location.getWorld().isChunkLoaded(location.getBlockX()>>4,location.getBlockZ()>>4))return true;
+        Block block=location.getBlock();if(!eligibleShelf(block))return false;
+        Inventory inv=bookshelfInventory(block);if(inv==null)return false;
+        for(int slot=0;slot<inv.getSize();slot++){
+            ItemStack item=inv.getItem(slot);if(book.id().toString().equals(bookId(item)))return true;
+            if(bookId(item)==null&&legacyMatches(item,book)){
+                var meta=item.getItemMeta();meta.getPersistentDataContainer().set(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING,book.id().toString());item.setItemMeta(meta);inv.setItem(slot,item);return true;
+            }
+        }
+        return false;
+    }
+    private boolean legacyMatches(ItemStack item,StoredBook book){
+        if(item==null||item.getType()!=Material.WRITTEN_BOOK||!(item.getItemMeta() instanceof BookMeta meta))return false;
+        return book.ownerUuid().equals(meta.getPersistentDataContainer().get(ownerUuidKey,PersistentDataType.STRING))&&fingerprint(meta).equals(safe(book.title())+"|"+safe(book.author())+"|"+String.join("\n",book.pages()));
+    }
     public void populateBookshelf(Block block) {
-        if(plugin.getRentalVaultManager()!=null&&plugin.getRentalVaultManager().rental(block.getLocation()))return;
-        if(block.getType()!=Material.CHISELED_BOOKSHELF)return;
+        if(!eligibleShelf(block))return;
         String location=serializeLocation(block.getLocation());boolean dirty=registeredShelves.add(location);
         Inventory inv=bookshelfInventory(block);if(inv==null)return;
-        Set<UUID> present=new HashSet<>();for(ItemStack item:inv.getContents())if(item!=null&&item.hasItemMeta()){
-            String value=item.getItemMeta().getPersistentDataContainer().get(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING);
-            if(value!=null)try{UUID id=UUID.fromString(value);present.add(id);StoredBook stored=books.get(id);if(stored!=null&&(stored.shelfLocation()==null||stored.shelfLocation().isBlank())){books.put(id,stored.withLocation(location));dirty=true;}}catch(IllegalArgumentException ignored){}
+        Set<UUID> present=new HashSet<>();
+        for(int slot=0;slot<inv.getSize();slot++){
+            ItemStack item=inv.getItem(slot);String value=bookId(item);
+            // Older direct submissions were copied before their catalog ID was attached.
+            if(value==null&&item!=null&&item.getType()==Material.WRITTEN_BOOK&&item.getItemMeta() instanceof BookMeta meta){
+                String owner=meta.getPersistentDataContainer().get(ownerUuidKey,PersistentDataType.STRING);
+                StoredBook legacy=books.values().stream().filter(b->b.ownerUuid().equals(owner)&&fingerprint(meta).equals(safe(b.title())+"|"+safe(b.author())+"|"+String.join("\n",b.pages()))).sorted(Comparator.comparing(b->b.id().toString())).findFirst().orElse(null);
+                if(legacy!=null){value=legacy.id().toString();meta.getPersistentDataContainer().set(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING,value);item.setItemMeta(meta);inv.setItem(slot,item);}
+            }
+            if(value!=null)try{UUID id=UUID.fromString(value);present.add(id);StoredBook stored=books.get(id);if(stored!=null&&!location.equals(stored.shelfLocation())&&!hasValidAssignment(stored)){books.put(id,stored.withLocation(location));dirty=true;}}catch(IllegalArgumentException ignored){}
         }
-        String category=shelfCategory(block.getLocation());
-        List<StoredBook> pending=books.values().stream().filter(b->!present.contains(b.id())&&(b.shelfLocation()==null||b.shelfLocation().isBlank()||b.shelfLocation().equals(location))).filter(b->category.isBlank()||category.equals("*")||category.equals(b.category())).sorted(Comparator.comparing(StoredBook::insertedAt).thenComparing(b->b.id().toString())).toList();
+        String category=shelfCategory(block.getLocation());List<StoredBook> pending=new ArrayList<>();
+        for(StoredBook book:books.values())if(!present.contains(book.id())){
+            boolean assigned=hasValidAssignment(book);if(assigned)continue;
+            if(book.shelfLocation()!=null&&!book.shelfLocation().isBlank()){book=book.withLocation("");books.put(book.id(),book);dirty=true;}
+            if(categoryMatches(category,book))pending.add(book);
+        }
+        pending.sort(Comparator.comparing(StoredBook::insertedAt).thenComparing(b->b.id().toString()));
         int next=0;for(int slot=0;slot<Math.min(6,inv.getSize())&&next<pending.size();slot++){
             ItemStack current=inv.getItem(slot);if(current!=null&&!current.getType().isAir())continue;
             StoredBook book=pending.get(next++);ItemStack item=book.toItemStack();item.setAmount(1);var meta=item.getItemMeta();meta.getPersistentDataContainer().set(new NamespacedKey(plugin,"library_book_id"),PersistentDataType.STRING,book.id().toString());item.setItemMeta(meta);inv.setItem(slot,item);books.put(book.id(),book.withLocation(location));dirty=true;
         }
-        // Inventory mutations must also be visible as occupied shelf slots on clients.
         if(block.getBlockData() instanceof org.bukkit.block.data.type.ChiseledBookshelf data){boolean changed=false;for(int slot=0;slot<6;slot++){boolean occupied=inv.getItem(slot)!=null&&!inv.getItem(slot).getType().isAir();if(data.isSlotOccupied(slot)!=occupied){data.setSlotOccupied(slot,occupied);changed=true;}}if(changed)block.setBlockData(data,false);}
         if(dirty)saveAsync();
     }
+    private void requestShelfStocking(){for(String shelf:registeredShelves)if(queuedStockingShelves.add(shelf))stockingShelves.add(shelf);}
     public int registeredShelfCount(){return registeredShelves.size();}
-    public void requestShelfScan(){for(World world:Bukkit.getWorlds())if(plugin.isLibraryWorld(world.getName()))for(org.bukkit.Chunk chunk:world.getLoadedChunks())queueChunk(chunk);}
+    public void requestShelfScan(){requestShelfStocking();for(World world:Bukkit.getWorlds())if(plugin.isLibraryWorld(world.getName()))for(org.bukkit.Chunk chunk:world.getLoadedChunks())queueChunk(chunk);}
     private void queueChunk(org.bukkit.Chunk chunk){if(!plugin.isLibraryWorld(chunk.getWorld().getName()))return;String key=chunk.getWorld().getName()+";"+chunk.getX()+";"+chunk.getZ();if(queuedChunks.add(key))scanChunks.add(key);}
     public void startShelfService(){if(shelfTask!=-1)return;plugin.getServer().getPluginManager().registerEvents(this,plugin);requestShelfScan();shelfTask=Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin,()->{
+        int shelvesPerTick=Math.max(1,Math.min(64,plugin.getConfig().getInt("bookshelves.shelves-per-pass",8)));
+        for(int i=0;i<shelvesPerTick&&!stockingShelves.isEmpty();i++){String key=stockingShelves.remove();queuedStockingShelves.remove(key);Location l=deserializeLocation(key);if(l!=null&&l.getWorld().isChunkLoaded(l.getBlockX()>>4,l.getBlockZ()>>4))populateBookshelf(l.getBlock());}
         int budget=Math.max(1,Math.min(4,plugin.getConfig().getInt("bookshelves.chunks-per-tick",1)));
         for(int i=0;i<budget&&!scanChunks.isEmpty();i++){String key=scanChunks.remove();queuedChunks.remove(key);String[] parts=key.split(";");World w=Bukkit.getWorld(parts[0]);int x=Integer.parseInt(parts[1]),z=Integer.parseInt(parts[2]);if(w!=null&&w.isChunkLoaded(x,z))for(BlockState tile:w.getChunkAt(x,z).getTileEntities())if(tile.getType()==Material.CHISELED_BOOKSHELF)populateBookshelf(tile.getBlock());}
         if(++shelfTicks%20==0){List<String> shelves=new ArrayList<>(registeredShelves);int count=Math.min(shelves.size(),Math.max(1,Math.min(64,plugin.getConfig().getInt("bookshelves.shelves-per-pass",8))));for(int i=0;i<count;i++){String key=shelves.get(Math.floorMod(shelfCursor++,shelves.size()));Location l=deserializeLocation(key);if(l==null||!l.getWorld().isChunkLoaded(l.getBlockX()>>4,l.getBlockZ()>>4))continue;Block b=l.getBlock();if(b.getType()!=Material.CHISELED_BOOKSHELF){registeredShelves.remove(key);for(var book:new ArrayList<>(books.values()))if(key.equals(book.shelfLocation()))books.put(book.id(),book.withLocation(""));saveAsync();}else populateBookshelf(b);}}
     },1,1);}
-    public void stopShelfService(){if(shelfTask!=-1)Bukkit.getScheduler().cancelTask(shelfTask);shelfTask=-1;scanChunks.clear();queuedChunks.clear();}
+    public void stopShelfService(){if(shelfTask!=-1)Bukkit.getScheduler().cancelTask(shelfTask);shelfTask=-1;scanChunks.clear();queuedChunks.clear();stockingShelves.clear();queuedStockingShelves.clear();}
     @org.bukkit.event.EventHandler public void chunk(org.bukkit.event.world.ChunkLoadEvent e){queueChunk(e.getChunk());}
     @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR,ignoreCancelled=true) public void placed(org.bukkit.event.block.BlockPlaceEvent e){if(e.getBlockPlaced().getType()==Material.CHISELED_BOOKSHELF&&plugin.isLibraryWorld(e.getBlockPlaced().getWorld().getName()))Bukkit.getScheduler().runTask(plugin,()->populateBookshelf(e.getBlockPlaced()));}
 

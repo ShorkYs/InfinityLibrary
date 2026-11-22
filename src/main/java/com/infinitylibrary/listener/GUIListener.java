@@ -110,7 +110,7 @@ public class GUIListener implements Listener {
                     boolean placedInShelf = plugin.getBookStorageManager().saveLecternBook(player, book);
                     e.getView().getTopInventory().setItem(22, null);
                     player.closeInventory();
-                    player.sendMessage(placedInShelf ? ChatColor.GREEN + "Book saved into a nearby chiseled bookshelf." : ChatColor.GREEN + "Book saved to the library bookshelf pool.");
+                    player.sendMessage(placedInShelf ? ChatColor.GREEN + "Book saved into a nearby chiseled bookshelf." : ChatColor.GREEN + "Book saved. Waiting for matching bookshelf space; it will be placed automatically.");
                 }
             }
         } catch (IllegalArgumentException ex) { player.sendMessage(ChatColor.RED + ex.getMessage()); }
@@ -147,7 +147,7 @@ public class GUIListener implements Listener {
                     boolean placed = plugin.getBookStorageManager().returnBookToLibrary(player, book);
                     e.getView().getTopInventory().setItem(13, null);
                     player.closeInventory();
-                    player.sendMessage(placed ? ChatColor.GREEN + "Book returned to a nearby chiseled bookshelf." : ChatColor.GREEN + "Book returned to the library pool.");
+                    player.sendMessage(placed ? ChatColor.GREEN + "Book returned to a nearby chiseled bookshelf." : ChatColor.GREEN + "Book returned. Waiting for matching bookshelf space; it will be placed automatically.");
                 }
             }
         } catch (IllegalArgumentException ex) { player.sendMessage(ChatColor.RED + ex.getMessage()); }

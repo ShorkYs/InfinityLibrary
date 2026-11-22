@@ -1,7 +1,7 @@
 # Updating to 4.0
 
 1. Stop Paper and back up the complete library world and `plugins/InfinityLibraryPlugin/` folder.
-2. Replace the old plugin JAR with `InfinityLibraryPlugin-4.0.0.jar`. Keep the data folder. Remove any duplicate old plugin JAR.
+2. Replace the old plugin JAR with `InfinityLibraryPlugin-4.0.1.jar`. Keep the data folder. Remove any duplicate old plugin JAR.
 3. Run Paper 26.3 with Java 25. The first schema-4 startup copies existing YAML into the plugin's backup directory before changing generation settings.
 4. Use `/il status`, `/il diagnose` and `/il builder` to review the catalog and expansion state. No world reset is needed.
 
