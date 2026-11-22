@@ -19,10 +19,12 @@ public final class RoomCatalog {
     public boolean isActive(String id) {return active.containsKey(id);}
     public Optional<Room> get(String id) {return Optional.ofNullable(active.containsKey(id)?active.get(id):archived.get(id));}
     public void load(Map<String,Room> builtinRooms,YamlConfiguration data,Consumer<String> warning) {
+        Map<String,Room> nextActive=new LinkedHashMap<>(builtinRooms),nextArchived=new LinkedHashMap<>();
+        read(data.getConfigurationSection("rooms"),nextActive,warning);
+        read(data.getConfigurationSection("archived-rooms"),nextArchived,warning);
         active.clear();archived.clear();defaults.clear();removedDefaults.clear();
         defaults.addAll(builtinRooms.keySet());active.putAll(builtinRooms);
-        read(data.getConfigurationSection("rooms"),active,warning);
-        read(data.getConfigurationSection("archived-rooms"),archived,warning);
+        active.putAll(nextActive);archived.putAll(nextArchived);
         for(String id:data.getStringList("removed-default-rooms"))if(defaults.contains(id)) {
             removedDefaults.add(id);Room removed=active.remove(id);if(removed!=null)archived.putIfAbsent(id,removed);
         }
@@ -32,7 +34,7 @@ public final class RoomCatalog {
     private void read(ConfigurationSection section,Map<String,Room> target,Consumer<String> warning) {
         if(section==null)return;
         for(String id:section.getKeys(false))try{target.put(id,Room.read(id,section.getConfigurationSection(id)));}
-        catch(RuntimeException e){warning.accept("Skipping invalid room "+id+": "+e.getMessage());}
+        catch(RuntimeException e){throw new IllegalArgumentException("Invalid room "+id+"; restore rooms.yml from backup",e);}
     }
     public YamlConfiguration write() {
         YamlConfiguration data=new YamlConfiguration();

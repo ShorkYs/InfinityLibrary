@@ -1,3 +1,5 @@
+> **4.0:** Player features open from `/il`; builder previews open from `/il builder` → Room catalog. Favorites and private rental books now join navigation and reading history; see [RENTALS.md](RENTALS.md). The retained controls below still apply.
+
 # Library community, reading and navigation — 2.6
 
 All five features have buttons in `/il` (the main chest menu). This update keeps existing

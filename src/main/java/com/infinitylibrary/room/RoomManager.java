@@ -33,9 +33,11 @@ public class RoomManager {
     }
 
     public void load() {
-        rooms.clear();addBuiltinRooms();builtinRooms=new LinkedHashMap<>(rooms);
+        var data=com.infinitylibrary.community.AtomicYaml.read(roomFile.toPath());
+        var previous=new LinkedHashMap<>(rooms);
+        rooms.clear();addBuiltinRooms();builtinRooms=new LinkedHashMap<>(rooms);rooms.clear();rooms.putAll(previous);
         boolean missing=!roomFile.exists();
-        catalog.load(builtinRooms,YamlConfiguration.loadConfiguration(roomFile),plugin.getLogger()::warning);
+        catalog.load(builtinRooms,data,plugin.getLogger()::warning);
         if(missing)save();
     }
 
@@ -238,6 +240,13 @@ public class RoomManager {
     }
 
     private void addBuiltinRooms() {
+        rooms.put("builtin_corridor_straight",rectangular("builtin_corridor_straight",RoomType.FILLER,5,5,11,List.of(new ConnectionPoint("north",new Vector3i(2,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(2,1,10),BlockFace.SOUTH,3,3)),false,false));
+        rooms.put("builtin_corridor_short",rectangular("builtin_corridor_short",RoomType.FILLER,5,5,6,List.of(new ConnectionPoint("north",new Vector3i(2,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(2,1,5),BlockFace.SOUTH,3,3)),false,false));
+        rooms.put("builtin_corridor_adapter",rectangular("builtin_corridor_adapter",RoomType.FILLER,5,5,2,List.of(new ConnectionPoint("north",new Vector3i(2,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(2,1,1),BlockFace.SOUTH,3,3)),false,false));
+        rooms.put("builtin_corridor_corner",rectangular("builtin_corridor_corner",RoomType.FILLER,5,5,5,List.of(new ConnectionPoint("north",new Vector3i(2,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("east",new Vector3i(4,1,2),BlockFace.EAST,3,3)),false,false));
+        rooms.put("builtin_corridor_junction",rectangular("builtin_corridor_junction",RoomType.FILLER,5,5,5,List.of(new ConnectionPoint("north",new Vector3i(2,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(2,1,4),BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,2),BlockFace.WEST,3,3),new ConnectionPoint("east",new Vector3i(4,1,2),BlockFace.EAST,3,3)),false,false));
+        rooms.put("builtin_rental",rectangular("builtin_rental",RoomType.RENTABLE,9,6,9,List.of(new ConnectionPoint("north",new Vector3i(4,1,0),BlockFace.NORTH,3,3)),true,true));
+        rooms.put("builtin_writing",rectangular("builtin_writing",RoomType.PUBLIC_WRITING,11,7,11,List.of(new ConnectionPoint("north",new Vector3i(5,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(5,1,10),BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,5),BlockFace.WEST,3,3),new ConnectionPoint("east",new Vector3i(10,1,5),BlockFace.EAST,3,3)),true,true));
         List<ConnectionPoint> exits=List.of(new ConnectionPoint("north",new Vector3i(5,1,0),BlockFace.NORTH,3,3),new ConnectionPoint("south",new Vector3i(5,1,10),BlockFace.SOUTH,3,3),new ConnectionPoint("west",new Vector3i(0,1,5),BlockFace.WEST,3,3),new ConnectionPoint("east",new Vector3i(10,1,5),BlockFace.EAST,3,3));
         Room shell=rectangular("builtin_modular",RoomType.FILLER,11,7,11,exits,false,false);
         List<RoomBlock> plain=shell.blocks().stream().map(b -> new RoomBlock(b.position(),b.blockData().equals("minecraft:bookshelf")?"minecraft:dark_oak_planks":b.blockData())).toList();
@@ -280,7 +289,7 @@ public class RoomManager {
         if (bookshelf) blocks.add(new RoomBlock(new Vector3i(sx/2,1,1), Material.CHISELED_BOOKSHELF.getKey().toString()));
         if (seats) blocks.add(new RoomBlock(new Vector3i(sx/2,1,sz/2), Material.OAK_STAIRS.getKey().toString()));
         if (seats) blocks.add(new RoomBlock(new Vector3i(sx/2+1,1,sz/2), Material.LECTERN.getKey().toString()));
-        return new Room(id, type, new Vector3i(sx, sy, sz), cps, blocks, List.of(), 100.0);
+        return new Room(id,type,new Vector3i(sx,sy,sz),cps,blocks,List.of(),100,List.of(),List.of(),seats?List.of(new RoomRegion("seat",new Vector3i(sx/2,1,sz/2),new Vector3i(1,1,1),"general"),new RoomRegion("table",new Vector3i(sx/2+1,1,sz/2),new Vector3i(1,1,1),"general")):List.of());
     }
 
     private void removeDoorBlock(List<RoomBlock> blocks, Vector3i doorwayBlock) {

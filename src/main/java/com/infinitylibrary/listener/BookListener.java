@@ -35,6 +35,7 @@ public class BookListener implements Listener {
     @EventHandler(ignoreCancelled = true) public void onInteract(PlayerInteractEvent e) {
         if (e.getHand() != EquipmentSlot.HAND) return;
         if(plugin.getAuthoringManager().handle(e.getPlayer(),e.getAction(),e.getClickedBlock())){e.setCancelled(true);return;}
+        if(plugin.getRentalVaultManager()!=null&&plugin.getRentalVaultManager().interact(e.getPlayer(),e.getClickedBlock(),e.getAction())){e.setCancelled(true);return;}
         if(e.getAction()==Action.RIGHT_CLICK_BLOCK&&plugin.getNoticeboardManager().isBoard(e.getClickedBlock())){e.setCancelled(true);plugin.getNoticeboardManager().browser(e.getPlayer(),0);return;}
         if((e.getAction()==Action.RIGHT_CLICK_AIR||e.getAction()==Action.RIGHT_CLICK_BLOCK)&&e.getItem()!=null&&e.getItem().getType()==Material.WRITTEN_BOOK&&!plugin.getBookStorageManager().canRead(e.getPlayer(),e.getItem())){e.setCancelled(true);e.getPlayer().sendMessage("This library book is private.");return;}
         if (!e.getPlayer().getWorld().getName().equals(plugin.getGenerationEngine().worldName())) return;
@@ -49,6 +50,7 @@ public class BookListener implements Listener {
             return;
         }
         if (e.getAction() == Action.RIGHT_CLICK_BLOCK && e.getClickedBlock() != null) {
+            if(e.getClickedBlock().getType()==Material.LECTERN&&plugin.getGenerationEngine().roomAt(e.getClickedBlock().getLocation()).flatMap(r->plugin.getRoomManager().get(r.roomId())).map(r->r.type()==com.infinitylibrary.model.RoomType.PUBLIC_WRITING).orElse(false)){plugin.getBookWritingManager().open(e.getPlayer());e.setCancelled(true);return;}
             if (isReadingSeat(e.getClickedBlock())) {
                 sitOnSlab(e.getPlayer(), e.getClickedBlock());
                 e.setCancelled(true);
@@ -59,7 +61,7 @@ public class BookListener implements Listener {
                 e.setCancelled(true);
                 return;
             }
-            if (e.getClickedBlock().getType() == Material.LECTERN) { plugin.getGuiManager().openMainMenu(e.getPlayer()); e.setCancelled(true); return; }
+            if (e.getClickedBlock().getType() == Material.LECTERN) {var role=plugin.getGenerationEngine().roomAt(e.getClickedBlock().getLocation()).flatMap(r->plugin.getRoomManager().get(r.roomId())).map(com.infinitylibrary.model.Room::type).orElse(com.infinitylibrary.model.RoomType.FILLER);if(role==com.infinitylibrary.model.RoomType.READ||role==com.infinitylibrary.model.RoomType.BOOK)plugin.getReadingManager().browser(e.getPlayer(),0,false);else plugin.getGuiManager().openMainMenu(e.getPlayer());e.setCancelled(true);return;}
             if (e.getClickedBlock().getType() == Material.CHISELED_BOOKSHELF) {
                 ItemStack item = e.getItem();
                 if (item != null && item.getType() == Material.WRITTEN_BOOK) {

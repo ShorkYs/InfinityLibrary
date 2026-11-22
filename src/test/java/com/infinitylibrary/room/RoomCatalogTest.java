@@ -53,4 +53,8 @@ class RoomCatalogTest {
         assertEquals(RoomType.STARTING,Room.read("entrance",y.getConfigurationSection("room")).type());
         assertThrows(IllegalArgumentException.class,() -> RoomType.parse("unknown"));
     }
+    @Test void malformedCatalogRejectsReloadWithoutDiscardingActiveOrArchivedRooms() {
+        var c=catalog(Map.of("a",room("a",RoomType.FILLER,5),"b",room("b",RoomType.FILLER,7)),new YamlConfiguration());c.remove(List.of("b"));String before=c.write().saveToString();var bad=new YamlConfiguration();bad.set("rooms.broken.type","NOT_A_ROLE");
+        assertThrows(RuntimeException.class,()->c.load(Map.of(),bad,message->{}));assertEquals(before,c.write().saveToString());
+    }
 }

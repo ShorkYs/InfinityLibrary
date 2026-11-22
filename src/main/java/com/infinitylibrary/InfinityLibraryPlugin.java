@@ -24,6 +24,10 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     private com.infinitylibrary.community.PreviewManager previewManager;
     private com.infinitylibrary.builder.AuthoringManager authoringManager;
     private com.infinitylibrary.builder.BuilderBridge builderBridge;
+    private com.infinitylibrary.rentals.RentalVaultManager rentalVault;
+    public com.infinitylibrary.rentals.RentalVaultManager getRentalVaultManager(){return rentalVault;}
+    private com.infinitylibrary.rentals.RentalManager rentalManager;
+    public com.infinitylibrary.rentals.RentalManager getRentalManager(){return rentalManager;}
     private BookListener bookListener;
     private RoomManager roomManager;
     private GenerationEngine generationEngine;
@@ -33,8 +37,15 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     private GUIManager guiManager;
     private SelectionManager selectionManager;
 
+    private boolean initialized;
     @Override public void onEnable() {
+        initialized=false;
         saveDefaultConfig();
+        if(com.infinitylibrary.community.AtomicYaml.read(getDataFolder().toPath().resolve("config.yml")).getInt("generation.schema",0)<4){
+            try{com.infinitylibrary.storage.BackupManager.existingData(this);}catch(RuntimeException ex){throw new IllegalStateException("Cannot back up existing plugin data before v4 migration",ex);}
+            if("builtin_modular".equals(getConfig().getString("generation.base-room-id")))getConfig().set("generation.base-room-id","");
+            getConfig().set("generation.mode","district");getConfig().set("generation.schema",4);saveConfig();
+        }
         propManager = new com.infinitylibrary.props.PropManager(this); propManager.load();
         roomManager = new RoomManager(this); roomManager.load();
         bookStorageManager = new BookStorageManager(this); bookStorageManager.load();
@@ -48,9 +59,11 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         collaborationManager=new com.infinitylibrary.community.CollaborationManager(this);
         readingManager=new com.infinitylibrary.community.ReadingManager(this);
         noticeboardManager=new com.infinitylibrary.community.NoticeboardManager(this);
+        rentalManager=new com.infinitylibrary.rentals.RentalManager(this);
         navigationManager=new com.infinitylibrary.community.NavigationManager(this);
         previewManager=new com.infinitylibrary.community.PreviewManager(this);
         nativeBookEditor=new com.infinitylibrary.writing.NativeBookEditor(this);getServer().getPluginManager().registerEvents(nativeBookEditor,this);
+        rentalVault=new com.infinitylibrary.rentals.RentalVaultManager(this);
         bookStorageManager.startShelfService();
         builderBridge=new com.infinitylibrary.builder.BuilderBridge(this);
         CommandHandler handler = new CommandHandler(this);
@@ -60,10 +73,15 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         bookListener = new BookListener(this);
         getServer().getPluginManager().registerEvents(bookListener, this);
         getServer().getPluginManager().registerEvents(new GUIListener(this), this);
+        getServer().getPluginManager().registerEvents(new com.infinitylibrary.rentals.RentalProtection(this),this);
+        initialized=true;
         getLogger().info("InfinityLibraryPlugin enabled.");
     }
 
     @Override public void onDisable() {
+        if(!initialized){org.bukkit.Bukkit.getScheduler().cancelTasks(this);return;}
+        initialized=false;
+        if(rentalVault!=null)rentalVault.shutdown();
         if(builderBridge!=null)builderBridge.shutdown();
         if(nativeBookEditor!=null)nativeBookEditor.cleanupAll();
         if(previewManager!=null)previewManager.shutdown();
@@ -87,7 +105,7 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
         roomManager.load();
         bookStorageManager.load();
         generationEngine.start();
-        collaborationManager.load();readingManager.load();noticeboardManager.load();navigationManager.load();
+        rentalManager.load();rentalVault.load();collaborationManager.load();readingManager.load();noticeboardManager.load();navigationManager.load();
     }
 
     public com.infinitylibrary.community.ManagedDialogs getManagedDialogs(){return managedDialogs;}
@@ -109,5 +127,5 @@ public final class InfinityLibraryPlugin extends JavaPlugin {
     public com.infinitylibrary.writing.NativeBookEditor getNativeBookEditor(){return nativeBookEditor;}
     public boolean isLibraryWorld(String name){return name.equals(generationEngine.worldName());}
     public boolean isRoomInUse(String id){return generationEngine.usesRoom(id);}
-    public void switchGenerationMode(String mode){if(!java.util.Set.of("unified","templates").contains(mode))throw new IllegalArgumentException("Generation now uses one unified system; alternate modes are retired. Existing experimental worlds/files are untouched.");}
+    public void switchGenerationMode(String mode){if(!java.util.Set.of("district","unified","templates").contains(mode))throw new IllegalArgumentException("Generation uses the district planner. Alternate world modes are retired; old experimental files are untouched.");}
 }

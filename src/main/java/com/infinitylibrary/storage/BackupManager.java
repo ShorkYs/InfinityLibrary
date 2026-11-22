@@ -14,6 +14,9 @@ public final class BackupManager {
         plugin.getGenerationEngine().save();
         plugin.getRoomManager().save();
         plugin.getBookStorageManager().saveNow();
+        return existingData(plugin);
+    }
+    public static Path existingData(InfinityLibraryPlugin plugin){
         Path root = plugin.getDataFolder().toPath();
         try {
             Path directory = Files.createDirectories(root.resolve("backups"));

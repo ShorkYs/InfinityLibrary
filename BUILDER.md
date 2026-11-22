@@ -1,36 +1,22 @@
-> **3.1:** B now opens the visual Studio workspace. See [STUDIO.md](STUDIO.md). The wand/settings/live-preview screen described here is available through **Wands / live**. Install matching 3.1 plugin and companion JARs.
+# Vanilla builder tools — 4.0
 
-# Infinity Library Builder 3.0
+Paper 26.3 / Java 25, `infinitylibrary.admin`. No client mod required. `/il builder` opens the separate administrator menu.
 
-## Installation
+## Capture a room
 
-The server runs Paper 26.3 and Java 25 with `InfinityLibraryPlugin-3.0.0.jar` in `plugins/`. Keep the existing plugin data folder when updating; back up worlds/data before upgrading.
+1. Choose **Selection tools → Room**. Left-click the first corner and right-click the opposite corner of the complete room. Bounds are inclusive. Wands use an available hotbar slot without replacing an ordinary held item.
+2. Open **Door settings**, choose the ID prefix and floor index, and capture each doorway rectangle with left/right clicks. Its boundary determines its facing; dimensions and floor indices must match the connecting template. Connections share the same wall plane during generation.
+3. Open **Decoration settings**, choose category and EXACT/PACKED, and mark target boxes. EXACT chooses one decoration of matching dimensions/category. PACKED can combine smaller props with optional gaps. Capture catalog props using `/il saveprop <id> <category> [weight]` or `/il savedeco`.
+4. **Room Diversity** configures an area ID, variant and weight. Select a target region, then an equally sized source build. Use **Add variant** for additional alternatives and **Variant door** to capture a connection in a variant. Different variants can therefore expose different doors, frozen with each generated instance.
+5. Shelf, table and seat tools capture room-local regions. Settings choose the category. These marks transform with the room and support shelf categories and reading interactions.
+6. Return to builder home → **Save selected room**, enter an ID and choose FILLER, READING, RENTABLE, PUBLIC_WRITING or STARTING. Replacing an unused ID requires confirmation and version checks; built templates remain protected. Saving STARTING selects the entrance for the next intentional reset, not for rebuilding the current world.
 
-The optional **client-only** companion runs Minecraft 26.3, Java 25, Fabric Loader 0.20.1 or newer compatible version, and Fabric API 0.166.2+26.3. Put Fabric API and `InfinityLibraryBuilder-3.0.0.jar` in the client's `mods/` folder. Do not put the companion JAR in the server plugins folder. Ordinary readers can use unmodified Minecraft.
+**Undo**, **Redo** and **Cancel** operate on staged selections. `/il builder undo|redo|cancel` also work. **Apply** commits regions to the source build; saving writes the template. Loading a template's areas requires selected bounds of exactly the same dimensions and does not paste the structure. Disconnect/world changes clear staging.
 
-An operator or player with `infinitylibrary.admin` presses **B** to open the editor. **V** toggles outlines; both keys are configurable in Controls. Without the mod, `/il builder` supplies the tools, actionbar prompts and corner particles.
+## Catalog, preview and administration
 
-## Building a room
+**Room catalog** opens template details, roles, weights, start/base choice, archive/removal and room preview. `/il preview <id>` shows temporary blocks only to you; rotate, mirror, reroll decorations/Diversity or choose a specific variant, then stop to restore your view. It requires loaded chunks, observes size/distance limits and never edits real blocks. Neighbor rendering in the old Studio is part of the shelved companion, not this vanilla preview.
 
-1. Open Tools and choose Room. Left-click the first outside corner of your build; right-click the opposite outside corner. Coordinates are inclusive.
-2. Choose Connection. Select each doorway rectangle with the same two-click sequence. Keep compatible dimensions, facing and floor indices. Existing connection commands remain available.
-3. Choose Decoration, configure category and EXACT or PACKED in Settings, then select a target box. EXACT uses decorations with matching dimensions/category; PACKED permits combinations and gaps.
-4. Choose Diversity. Configure area/variant/weight. Select the target box, then an equally sized source box containing the alternative build. Add further variants in Settings. Variant door wand selects connections for that source variant, preserving variant-specific topology.
-5. Shelf, Table and Seat tools select category/reading regions inside the room. These regions are saved with the template and transform with its generated instances. Apply commits marks to the source build without saving a template.
-6. In Rooms, enter an ID, select a type (including STARTING), and Save. Replacing an existing unused template requires the current version. Built templates retain existing replacement protection. Configure the starting-room selection through the existing `/il startroom` workflow; merely saving a STARTING template does not change an existing library.
+Builder home also offers pause/resume, nearby generation diagnostics, YAML backup and loaded-bookshelf refresh. `/il diagnose`, `/il status`, `/il backup`, `/il shelves` remain available. A YAML backup does not include world chunks. `/il reset confirm` is an explicit destructive reset and first creates a data backup.
 
-Left-click restarts the current corner pair. Right-click requires a first corner. Undo/Redo covers staged room bounds and areas; Cancel drops only unfinished corners. Save/Apply commit staging and clear undo history. World changes and disconnects clear staging. Tools use an empty hotbar slot or replace an existing library wand, preserving ordinary held items.
-
-Room browser **Load areas into selection** requires an already selected build with the same dimensions. This edits metadata around a physical build; it does not paste or relocate the saved structure. Preview sends temporary blocks only to your client, supports rotate/mirror/reroll and explicit Diversity variants, and expires under the configured preview limits. Stop preview to restore the real blocks.
-
-The companion displays authoritative server boxes for room bounds, doors, decoration targets, Diversity targets/source, reading/shelf regions and previews. Optional X-ray makes boxes visible through blocks. It never supplies arbitrary world edits: normal block interactions, permissions, world/reach checks, session/revision checks and template version checks are enforced on the server.
-
-## Generator
-
-The single generator retains saved-template placement and all previous room features. It builds candidate domains for open connections across a nearby neighborhood, prioritizes constrained sockets, forward-checks conflicting candidates, and compares continuation quality. A fixed node limit bounds the search; it is a local planner, not a guarantee of a globally optimal infinite map. Seeded weights determine alternative ordering. Actual placement still checks terrain and nearby viable exits before committing queued blocks.
-
-`generation.planning.neighborhood-radius` defaults to 48, `search-nodes` to 512 and `seed` to 20261120. Existing candidate/topology/world budgets remain effective. Increase budgets cautiously on a test server. `generation.mode: unified` is the sole mode; legacy `templates` commands are accepted as a compatibility alias, and experimental `procedural` switching is rejected. Old generated placements remain; stale cached plans are rebuilt once.
-
-## Build
-
-Server: `./gradlew build` in the repository root. Client: `cd fabric-client && ./gradlew build`. Both require Java 25. The client project uses Gradle 9.8.2 and Fabric Loom 1.19.4; the server wrapper remains independent.
+See [GENERATION.md](GENERATION.md), [ROOMS.md](ROOMS.md), [PROPS.md](PROPS.md) and [DIVERSITY.md](DIVERSITY.md) for detailed geometry and command options. [BUILDER-LEGACY.md](BUILDER-LEGACY.md) and [STUDIO.md](STUDIO.md) are archived client-mod references; they do not describe the current default workflow.

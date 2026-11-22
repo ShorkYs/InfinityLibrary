@@ -1,3 +1,18 @@
+# Room roles — 4.0
+
+Use the builder **Save selected room** dialog or `/il saveroom <id> <type>`. Change a saved unused template in its details or with `/il roomtype <id> <type>`.
+
+| Role | Purpose |
+| --- | --- |
+| STARTING | Entrance only; excluded from normal expansion |
+| FILLER | Corridors, turns, junctions and connecting spaces |
+| READING | Reading areas; lecterns open the collection, marked seats support sitting |
+| RENTABLE | Free timed private workspaces with shelf archive and notes |
+| PUBLIC_WRITING | Communal writing areas; lecterns open the writing desk |
+| BOOK | Retained legacy book-room role and navigation destination |
+
+`READING` is stored as legacy-compatible `READ`. The new default rental and public writing examples include shelves, tables, seats and lecterns; existing instances are not rebuilt. Roles influence layout preferences but do not relax collision/door rules. Only positive-weight active templates can expand the library.
+
 # Starting rooms and removing default templates
 
 Version 2.3 adds a **STARTING** room type and persistent template removal. These are

@@ -1,3 +1,5 @@
+> **Archived 3.1 client companion.** Fabric work is shelved. Infinity Library 4.0 uses [vanilla builder menus and wands](BUILDER.md); no client mod is required.
+
 # Infinity Library Studio 3.1
 
 The optional Fabric 26.3 companion now opens a docked visual workspace with **B**. Its layout takes inspiration from 3D editors: a catalog/outliner on the left, a viewport in the center, and a properties inspector on the right. This is an independent Infinity Library tool; Axiom and Blender are not dependencies.

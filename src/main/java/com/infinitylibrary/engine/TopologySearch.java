@@ -19,8 +19,11 @@ public final class TopologySearch {
     public boolean limited(){return limited||!complete;}
     private int checks;
     public TopologySearch(Collection<Room> rooms,int topologyLimit,int checks,Function<LayoutPlanner.Box,Fit> terrain) {
+        this(rooms,topologyLimit,checks,terrain,0L);
+    }
+    public TopologySearch(Collection<Room> rooms,int topologyLimit,int checks,Function<LayoutPlanner.Box,Fit> terrain,long seed) {
         this.terrain=terrain;this.checks=checks;
-        Map<Room,Double> order=new HashMap<>();Random random=new Random();for(Room room:rooms)order.put(room,-Math.log(Math.max(1e-12,random.nextDouble()))/Math.max(1e-12,room.spawnChance()));
+        Map<Room,Double> order=new HashMap<>();Random random=new Random(seed);for(Room room:rooms.stream().sorted(Comparator.comparing(Room::id)).toList())order.put(room,-Math.log(Math.max(1e-12,random.nextDouble()))/Math.max(1e-12,room.spawnChance()));
         List<Room> ordered=new ArrayList<>(rooms);ordered.sort(Comparator.comparingDouble(order::get));
         for(Room room:ordered){var choices=DiversityComposition.choices(room,topologyLimit);complete&=choices.complete();for(var c:choices.values())templates.add(new Template(room,c));}
     }
@@ -47,6 +50,8 @@ public final class TopologySearch {
     }
     public Fit continuation(ConnectionPoint target,List<LayoutPlanner.Box> obstacles,Collection<ConnectionPoint> openDoors) {
         if(openDoors.stream().anyMatch(cp -> linked(target,cp)))return Fit.YES;
+        LayoutPlanner.Box prior=witnesses.get(target);if(prior!=null&&obstacles.stream().noneMatch(b->b.conflicts(prior))&&clear(prior)==Fit.YES)return Fit.YES;
+        if(checks<=0){limited=true;return Fit.UNKNOWN;}
         boolean unknown=!complete;
         for(Template template:templates)for(ConnectionPoint cp:template.connections())for(RoomTransform transform:RoomTransform.all()) {
             ConnectionPoint entrance=cp.transform(transform,template.room().size());if(!target.compatibleWith(entrance))continue;

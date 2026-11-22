@@ -1,0 +1,13 @@
+package com.infinitylibrary.nextgen;
+import org.junit.jupiter.api.Test;import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static com.infinitylibrary.nextgen.DistrictPlan.*;
+class DistrictPlanTest {
+ Room room(UUID id,int x,Facing facing){return new Room(id,"test",Role.FILLER,new Volume(new Point(x,0,0),new Point(5,5,5)),List.of(new Door("door",facing,0,Set.of(new Point(facing==Facing.EAST?x+4:x,1,2)))));}
+ @Test void sharedOpeningProducesConnectedDistrict(){UUID a=UUID.randomUUID(),b=UUID.randomUUID();assertDoesNotThrow(()->new DistrictPlan(List.of(room(a,0,Facing.EAST),room(b,4,Facing.WEST)),List.of(new Link(new Socket(a,"door"),new Socket(b,"door"))),Set.of()));}
+ @Test void cannotCommitUnresolvedDoor(){UUID a=UUID.randomUUID();assertThrows(IllegalArgumentException.class,()->new DistrictPlan(List.of(room(a,0,Facing.EAST)),List.of(),Set.of()));}
+ @Test void frontierIsExplicit(){UUID a=UUID.randomUUID();assertDoesNotThrow(()->new DistrictPlan(List.of(room(a,0,Facing.EAST)),List.of(),Set.of(new Socket(a,"door"))));}
+ @Test void offsetOrWrongFacingCannotConnect(){UUID a=UUID.randomUUID(),b=UUID.randomUUID();assertThrows(IllegalArgumentException.class,()->new DistrictPlan(List.of(room(a,0,Facing.EAST),room(b,5,Facing.WEST)),List.of(new Link(new Socket(a,"door"),new Socket(b,"door"))),Set.of()));}
+ @Test void disconnectedRoomsAreRejectedEvenWithFrontiers(){UUID a=UUID.randomUUID(),b=UUID.randomUUID();assertThrows(IllegalArgumentException.class,()->new DistrictPlan(List.of(room(a,0,Facing.EAST),room(b,20,Facing.WEST)),List.of(),Set.of(new Socket(a,"door"),new Socket(b,"door"))));}
+ @Test void plannedOpeningsMustFaceOutOfTheRoom(){assertThrows(IllegalArgumentException.class,()->new Room(UUID.randomUUID(),"bad",Role.FILLER,new Volume(new Point(0,0,0),new Point(5,5,5)),List.of(new Door("door",Facing.EAST,0,Set.of(new Point(2,1,2))))));}
+ @Test void searchLimitNeverReturnsAnIncompletePlan(){UUID id=UUID.randomUUID();var initial=new DistrictPlan(List.of(room(id,0,Facing.EAST)),List.of(),Set.of(new Socket(id,"door")));var result=new DistrictSearch().search(initial,p->List.of(),p->false,p->0,1,0,2);assertEquals(DistrictSearch.Status.BUDGET_REACHED,result.status());assertTrue(result.plan().isEmpty());}
+ @Test void validatedGoalCanBeReturned(){UUID id=UUID.randomUUID();var initial=new DistrictPlan(List.of(room(id,0,Facing.EAST)),List.of(),Set.of(new Socket(id,"door")));var result=new DistrictSearch().search(initial,p->List.of(),p->true,p->0,1,2,2);assertEquals(DistrictSearch.Status.COMPLETE,result.status());assertEquals(initial,result.plan().orElseThrow());}
+}

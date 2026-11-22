@@ -32,15 +32,16 @@ public final class BookWritingManager {
         this.plugin=plugin; this.file=plugin.getDataFolder().toPath().resolve("drafts.yml");
     }
     public void load() {
-        drafts.clear();
-        YamlConfiguration y=YamlConfiguration.loadConfiguration(file.toFile());
+        Map<UUID,BookDraft> next=new HashMap<>();
+        YamlConfiguration y=com.infinitylibrary.community.AtomicYaml.read(file);
         var root=y.getConfigurationSection("drafts");
-        if(root==null) return;
+        if(root==null) {drafts.clear();return;}
         for(String id:root.getKeys(false)) try {
             var s=root.getConfigurationSection(id); BookDraft d=new BookDraft();
             d.details(s.getString("title",""),s.getString("category","general"),s.getString("tags",""),s.getBoolean("public"));
-            d.replacePages(s.getStringList("pages")); d.move(s.getInt("page",0)); drafts.put(UUID.fromString(id),d);
-        } catch(Exception e) { plugin.getLogger().warning("Cannot read manuscript "+id+": "+e.getMessage()); }
+            d.replacePages(s.getStringList("pages")); d.move(s.getInt("page",0)); next.put(UUID.fromString(id),d);
+        } catch(Exception e) { throw new IllegalStateException("Cannot read manuscript "+id+"; restore drafts.yml from backup",e); }
+        drafts.clear();drafts.putAll(next);
     }
     public BookDraft draft(UUID id) { return drafts.computeIfAbsent(id,k -> new BookDraft()); }
     public void save() {
@@ -74,6 +75,10 @@ public final class BookWritingManager {
         icon(inv,29,Material.LIME_DYE,"§aInsert a new page","§7After the current page · maximum 100");
         icon(inv,31,Material.RED_DYE,"§cDelete this page","§7Opens a confirmation");
         icon(inv,33,Material.CLOCK,"§aSaved manuscript","§7Text is saved when you press Save","§7Resume after logout or server restart");
+        icon(inv,35,Material.INK_SAC,"Bold page","Wrap current page in **bold** markup");
+        icon(inv,37,Material.FEATHER,"Italic page","Wrap current page in _italic_ markup");
+        icon(inv,39,Material.PAPER,"Insert divider","Append a divider to this page");
+        icon(inv,41,Material.NAME_TAG,"Heading","Prefix this page with a heading marker");
         icon(inv,45,Material.CHEST,"§eMain menu");
         icon(inv,47,Material.BOOK,"§bPreview book","§7Read without spending a book & quill");
         icon(inv,51,Material.EMERALD,"§aFinish book","§7Sign a copy or publish to the library","§7Costs one blank book & quill");
@@ -96,6 +101,7 @@ public final class BookWritingManager {
             case 24 -> { d.move(1); save(); open(p); }
             case 29 -> { d.addPage(); save(); open(p); }
             case 31 -> confirmation(p,true);
+            case 35,37,39,41 -> {String old=d.page();String operation=slot==35?"bold":slot==37?"italic":slot==39?"divider":"heading";d.page(BookTypography.apply(old,operation));try{save();}catch(RuntimeException ex){d.page(old);throw ex;}open(p);}
             case 45 -> plugin.getGuiManager().openMainMenu(p);
             case 47 -> { p.closeInventory(); p.openBook(book(p,d,false)); }
             case 51 -> { d.validatePublish(); confirmation(p,false); }
@@ -122,7 +128,7 @@ public final class BookWritingManager {
     public ItemStack book(Player p,BookDraft d,boolean signed) {
         if(signed) d.validatePublish();
         ItemStack item=new ItemStack(Material.WRITTEN_BOOK); BookMeta m=(BookMeta)item.getItemMeta();
-        m.setTitle(d.title().isBlank()?"Manuscript preview":d.title()); m.setAuthor(p.getName()); m.setPages(d.pages());
+        m.setTitle(d.title().isBlank()?"Manuscript preview":d.title()); m.setAuthor(p.getName()); m.setPages(d.pages().stream().map(BookTypography::render).toList());
         var data=m.getPersistentDataContainer();
         data.set(new NamespacedKey(plugin,"book_owner_uuid"),PersistentDataType.STRING,p.getUniqueId().toString());
         data.set(new NamespacedKey(plugin,"book_owner_name"),PersistentDataType.STRING,p.getName());

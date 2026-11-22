@@ -32,11 +32,19 @@ public final class PropManager {
     public Collection<Prop> all() { return List.copyOf(props.values()); }
     public Prop get(String id) {Prop p=props.get(id);if(p==null)throw new IllegalArgumentException("Prop not found: "+id);return p;}
     public void load() {
-        props.clear(); builtins();
-        var root=YamlConfiguration.loadConfiguration(plugin.getDataFolder().toPath().resolve("props.yml").toFile()).getConfigurationSection("props");
-        if(root==null&&!Files.exists(plugin.getDataFolder().toPath().resolve("props.yml")))save();
-        if(root!=null)for(String id:root.getKeys(false))try {if(props.size()>=256&&!props.containsKey(id))break;props.put(id,Prop.read(id,root.getConfigurationSection(id)));}catch(RuntimeException e){plugin.getLogger().warning("Invalid prop "+id+": "+e.getMessage());}
+        var path=plugin.getDataFolder().toPath().resolve("props.yml");
+        var root=com.infinitylibrary.community.AtomicYaml.read(path).getConfigurationSection("props");
+        var previous=new LinkedHashMap<>(props);
+        try {
+            props.clear();builtins();
+            if(root!=null)for(String id:root.getKeys(false)) {
+                if(props.size()>=256&&!props.containsKey(id))throw new IllegalArgumentException("Prop catalog exceeds 256 entries");
+                props.put(id,Prop.read(id,root.getConfigurationSection(id)));
+            }
+            if(!Files.exists(path))save();
+        }catch(RuntimeException ex){props.clear();props.putAll(previous);throw new IllegalStateException("Cannot load props.yml; restore it from backup",ex);}
     }
+
     private void save() {
         YamlConfiguration y=new YamlConfiguration();var root=y.createSection("props");for(Prop p:props.values())p.write(root.createSection(p.id()));
         Path target=plugin.getDataFolder().toPath().resolve("props.yml"),temp=target.resolveSibling("props.yml.tmp");

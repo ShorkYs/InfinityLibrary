@@ -126,6 +126,7 @@ public class SelectionManager {
     private boolean isReadingSeatWand(ItemStack item) { return item != null && item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer().has(readingSeatWandKey, PersistentDataType.BYTE); }
 
     public void setBookshelfCategoryMode(Player player, String category) {
+        if(plugin.getAuthoringManager()!=null)plugin.getAuthoringManager().category(player,category);
         bookshelfCategoryModes.put(player.getUniqueId(), category == null || category.isBlank() ? "general" : category);
         player.sendMessage(ChatColor.GOLD + "Bookshelf category wand set to category: " + bookshelfCategoryModes.get(player.getUniqueId()));
     }
@@ -143,6 +144,8 @@ public class SelectionManager {
         player.sendMessage(ChatColor.LIGHT_PURPLE + "Selection wand mode set to " + mode.name() + ".");
     }
 
+    private final java.util.Map<java.util.UUID,Integer> connectionFloors=new java.util.HashMap<>();
+    public void setConnectionFloor(Player p,int floor){if(floor<-100000||floor>100000)throw new IllegalArgumentException("Invalid floor index");connectionFloors.put(p.getUniqueId(),floor);}
     public void setConnectionPrefix(Player player, String prefix) {
         String effective = prefix == null || prefix.isBlank() ? "conn" : prefix;
         connectionPrefixes.put(player.getUniqueId(), effective);
@@ -292,7 +295,7 @@ public class SelectionManager {
             Vector3i center = new Vector3i(min.x()+(max.x()-min.x()+1)/2, min.y(), min.z()+(max.z()-min.z()+1)/2);
             String prefix = connectionPrefixes.getOrDefault(playerId, "conn");
             int number = connectionCounters.merge(player.getUniqueId(), 1, Integer::sum);
-            ConnectionPoint connectionPoint = new ConnectionPoint(prefix + "_" + number, center, face, width, height);
+            ConnectionPoint connectionPoint = new ConnectionPoint(prefix + "_" + number, center, face, width, height,connectionFloors.getOrDefault(player.getUniqueId(),0));
             addStagedConnection(player, connectionPoint);
             player.sendMessage(ChatColor.AQUA + "Staged connection " + connectionPoint.id() + " at " + center + " facing " + face.name() + " (" + width + "x" + height + ").");
         } catch (IllegalArgumentException ex) {

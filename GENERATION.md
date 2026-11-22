@@ -1,4 +1,34 @@
-> **3.0 update:** active planning now uses neighborhood constraint search rather than the older sibling beam search described below. See [BUILDER.md](BUILDER.md#generator). Shared planes, frontier checks, queued placement and dead-end behavior remain applicable.
+# District generation — 4.0
+
+The live generator plans connected **groups of future rooms**, including descendants behind unbuilt hallways. Existing rooms remain fixed. By default it compares proposals up to 12 rooms and depth 6, retaining four promising layouts at each step. This favors large destination rooms, varied roles and loops while allowing filler corridors to bridge their doors. Straight, short, adapter, corner and junction templates are included; custom corridors use the same connection system.
+
+The planner checks other nearby viable exits and requires continuation witnesses for the planned frontier. An exhausted budget produces an unknown result and defers planning. Automatic unlimited growth cannot intentionally consume its entire frontier. Compatible connections that already meet form loops. A finite room cap or explicitly requested manual placement may intentionally terminate a branch.
+
+Plans are atomically saved in `generated.yml` before blocks are queued. Reservations include parent UUIDs, transforms, frozen Diversity and future instances. Reload resolves these dependencies from placed parents; unreachable old branches are discarded. Terrain is checked again before placement. An externally blocked branch is replanned without moving built rooms.
+
+```yaml
+generation:
+  mode: district
+  district:
+    rooms: 12
+    depth: 6
+    beam-width: 4
+    search-states: 768
+    alternatives-per-template: 4
+  planning:
+    seed: 20261120
+    topology-choices-per-room: 64
+    connection-check-budget: 200000
+    world-block-budget: 1000000
+```
+
+These are bounded searches, not guarantees of a globally optimal or endlessly connected layout. Missing corner templates, incompatible dimensions/floor indices, large obstacles, limited candidate alternatives and many Diversity combinations can defer expansion. Planning currently runs on the server thread; raise budgets cautiously. Block placement is spread over ticks using `placement-blocks-per-tick`.
+
+Use `/il baseroom all` for the active enabled catalog. A selected custom base uses that room plus enabled built-in `builtin_corridor_*` filler templates. Those fillers must still exist in the active catalog; removing defaults removes them too. `/il diagnose` near a door reports eligibility, compatible connectors, proximity and search deferral. `/il status` reports reservations, including future-parent plans. Standing near a door is sufficient: periodic checks continue after the current build finishes.
+
+## Shared planes, walls and variant doors
+
+The following retained geometry/authoring details apply to 4.0. Historical planning parameter examples below describe older releases; prefer the district settings above.
 
 # Room planning, dead ends and variant doors — 2.5
 

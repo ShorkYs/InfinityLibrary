@@ -8,7 +8,7 @@ import java.util.UUID;
 
 /** Holder identity prevents another inventory with a matching title from invoking actions. */
 public final class LibraryMenu implements InventoryHolder {
-    public enum Screen { BUILDER_TOOLS, NOTICEBOARD, READ_CATALOG, READING_HISTORY, COLLAB_LIST, COLLAB_EDIT, COLLAB_PUBLISH, NAVIGATION, NAV_ROOMS, PREVIEW, ROOMS, ROOM_DETAILS, CONFIRM_DEFAULT_ROOMS, PROPS, MAIN, WRITER, CONFIRM_PUBLISH, CONFIRM_DELETE }
+    public enum Screen { RENTALS, RENTAL_ROOM, RENTAL_BOOKS, RENTAL_BOOK, RENTAL_NOTES, BUILDER_HOME, BUILDER_TOOLS, NOTICEBOARD, READ_CATALOG, READING_HISTORY, COLLAB_LIST, COLLAB_EDIT, COLLAB_PUBLISH, NAVIGATION, NAV_ROOMS, PREVIEW, ROOMS, ROOM_DETAILS, CONFIRM_DEFAULT_ROOMS, PROPS, MAIN, WRITER, CONFIRM_PUBLISH, CONFIRM_DELETE }
     private final Inventory inventory;
     private final Screen screen;
     private final UUID owner;

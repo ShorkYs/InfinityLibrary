@@ -1,4 +1,5 @@
 package com.infinitylibrary.storage;
+import com.infinitylibrary.community.AtomicYaml;
 
 import com.infinitylibrary.InfinityLibraryPlugin;
 import org.bukkit.Bukkit;
@@ -68,20 +69,19 @@ public class BookStorageManager implements org.bukkit.event.Listener {
     }
 
     public void load() {
-        books.clear();
-        shelfCategories.clear();
-        daily = YamlConfiguration.loadConfiguration(dailyFile);
-        if (!file.exists()) return;
-        YamlConfiguration y = YamlConfiguration.loadConfiguration(file);
-        registeredShelves.clear();registeredShelves.addAll(y.getStringList("registered-shelves"));
+        YamlConfiguration nextDaily = AtomicYaml.read(dailyFile.toPath());
+        YamlConfiguration y = AtomicYaml.read(file.toPath());
+        Map<UUID,StoredBook> nextBooks=new HashMap<>();
+        Map<String,String> nextCategories=new HashMap<>();
         ConfigurationSection root = y.getConfigurationSection("books");
-        if (root == null) return;
-        for (String key : root.getKeys(false)) {
-            try { StoredBook b = StoredBook.read(UUID.fromString(key), root.getConfigurationSection(key)); books.put(b.id(), b); }
-            catch (Exception ex) { plugin.getLogger().warning("Skipping invalid stored book " + key + ": " + ex.getMessage()); }
+        if(root!=null)for(String key:root.getKeys(false)) {
+            try { StoredBook book=StoredBook.read(UUID.fromString(key),root.getConfigurationSection(key));nextBooks.put(book.id(),book); }
+            catch(RuntimeException ex){throw new IllegalStateException("Invalid stored book "+key+"; restore books.yml from backup",ex);}
         }
-        ConfigurationSection shelves = y.getConfigurationSection("shelf-categories");
-        if (shelves != null) for (String key : shelves.getKeys(false)) shelfCategories.put(key, shelves.getString(key, ""));
+        ConfigurationSection shelves=y.getConfigurationSection("shelf-categories");
+        if(shelves!=null)for(String key:shelves.getKeys(false))nextCategories.put(key,shelves.getString(key,""));
+        books.clear();books.putAll(nextBooks);shelfCategories.clear();shelfCategories.putAll(nextCategories);
+        registeredShelves.clear();registeredShelves.addAll(y.getStringList("registered-shelves"));daily=nextDaily;
     }
 
     private int saveTask = -1;
@@ -91,8 +91,8 @@ public class BookStorageManager implements org.bukkit.event.Listener {
         saveTask = Bukkit.getScheduler().runTaskLater(plugin, () -> { saveTask = -1; saveNow(); }, 40L).getTaskId();
     }
     public synchronized void saveNow() {
-        try { persistBookCollection(); if(daily!=null) daily.save(dailyFile); }
-        catch(RuntimeException | IOException e) { plugin.getLogger().severe("Unable to save book data: "+e.getMessage()); }
+        try { persistBookCollection(); if(daily!=null) AtomicYaml.write(dailyFile.toPath(),daily); }
+        catch(RuntimeException e) { plugin.getLogger().severe("Unable to save book data: "+e.getMessage()); }
     }
 
     /** Acknowledge publication only after the searchable collection is safely on disk. */
@@ -376,6 +376,7 @@ public class BookStorageManager implements org.bukkit.event.Listener {
     }
 
     public void populateBookshelf(Block block) {
+        if(plugin.getRentalVaultManager()!=null&&plugin.getRentalVaultManager().rental(block.getLocation()))return;
         if(block.getType()!=Material.CHISELED_BOOKSHELF)return;
         String location=serializeLocation(block.getLocation());boolean dirty=registeredShelves.add(location);
         Inventory inv=bookshelfInventory(block);if(inv==null)return;

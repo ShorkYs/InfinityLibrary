@@ -7,7 +7,17 @@ start-location:
   pitch: 0
 proximity-radius: 9.0
 generation:
-  mode: unified
+  schema: 4
+  mode: district
+  # Whole connected future layouts, bounded to avoid unbounded server work.
+  district:
+    rooms: 12
+    depth: 6
+    beam-width: 4
+    search-states: 768
+    alternatives-per-template: 4
+  # Library structures are read-only for players; builders retain edit access.
+  protect-structures: true
   max-rooms-per-tick: 1
   # Recheck explorers even when they stand still after construction/teleport.
   exploration-check-interval-ticks: 5
@@ -26,10 +36,10 @@ generation:
     topology-choices-per-room: 64
     connection-check-budget: 200000
     max-doors: 16
-    world-block-budget: 300000
+    world-block-budget: 1000000
   start-room-id: "builtin_start"
   # Empty string restores mixed room-template selection.
-  base-room-id: "builtin_modular"
+  base-room-id: ""
   sign-min-rooms: 6
   # Proven unfillable openings are replaced on their own room boundary.
   # /il reopendeadends restores them. Base/catalog changes reopen automatically.
@@ -83,3 +93,10 @@ bookshelves:
   # Only loaded chunks are inspected; existing occupied slots are never replaced.
   chunks-per-tick: 1
   shelves-per-pass: 8
+
+rentals:
+  duration-hours: 168
+
+builder:
+  # Compatibility only. The server-side menus and wands need no client mod.
+  legacy-companion-enabled: false

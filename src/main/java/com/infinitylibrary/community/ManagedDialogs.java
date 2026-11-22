@@ -30,7 +30,7 @@ public final class ManagedDialogs {
             if(!(audience instanceof Player actor)||!actor.getUniqueId().equals(owner))return;
             Bukkit.getScheduler().runTask(plugin,()->{if(!p.isOnline()||!p.hasPermission("infinitylibrary.command")||!token.equals(tokens.get(owner)))return;tokens.remove(owner);try{button.action().accept(response);}catch(RuntimeException ex){p.sendMessage(Component.text(ex.getMessage()==null?"Unable to perform this action.":ex.getMessage()));}});
         },ClickCallback.Options.builder().uses(1).lifetime(Duration.ofMinutes(10)).build())));
-        Dialog dialog=Dialog.create(factory -> factory.empty().base(DialogBase.builder(Component.text(title)).canCloseWithEscape(true).afterAction(DialogBase.DialogAfterAction.CLOSE).body(body.isEmpty()?List.of():List.of(DialogBody.plainMessage(Component.text(body),300))).inputs(fields).build()).type(DialogType.multiAction(actions,null,2)));
+        Dialog dialog=Dialog.create(factory -> factory.empty().base(DialogBase.builder(Component.text(title)).canCloseWithEscape(true).afterAction(DialogBase.DialogAfterAction.CLOSE).body(body.isEmpty()?List.of():List.of(DialogBody.plainMessage(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(body),300))).inputs(fields).build()).type(DialogType.multiAction(actions,null,2)));
         p.showDialog(dialog);
     }
 }

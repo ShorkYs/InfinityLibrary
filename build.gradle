@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'com.infinitylibrary'
-version = '3.1.0'
+version = '4.0.0'
 
 java {
     toolchain {
@@ -30,3 +30,20 @@ processResources {
 
 dependencies { testImplementation 'io.papermc.paper:paper-api:26.3.build.253-stable'; testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'; testRuntimeOnly 'org.junit.platform:junit-platform-launcher' }
 test { useJUnitPlatform() }
+
+// Optional disposable-server harness; never installed or run by the normal build.
+tasks.register('compilePaperProbe', JavaCompile) {
+    source = fileTree('verification') { include 'LibraryProbe.java' }
+    classpath = sourceSets.test.runtimeClasspath
+    destinationDirectory = layout.buildDirectory.dir('paper-probe/classes')
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(25) }
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+tasks.register('paperProbeJar', Jar) {
+    dependsOn tasks.named('compilePaperProbe')
+    archiveFileName = 'LibraryProbe.jar'
+    destinationDirectory = layout.buildDirectory.dir('paper-probe')
+    from tasks.named('compilePaperProbe').map { it.destinationDirectory }
+    from('verification/probe-plugin.yml') { rename { 'plugin.yml' } }
+}
